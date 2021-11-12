@@ -11,3 +11,7 @@ int main()
   return 0;
 }
 
+void hello_test()
+{
+  return;
+}
