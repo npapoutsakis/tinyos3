@@ -10,3 +10,8 @@ int main()
   vm_boot(bootfunc, 4, 0);
   return 0;
 }
+
+void print_hello1()
+{
+  return;
+}

@@ -13,3 +13,7 @@ int main()
   return 0;
 }
 
+void print_hello2()
+{
+  return;
+}
