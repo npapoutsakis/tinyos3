@@ -7,6 +7,7 @@ void bootfunc() {
   fprintf(stderr, "Bye from core %u\n", cpu_core_id);  
 }
 
+//Example2
 int main()
 {
   vm_boot(bootfunc, 4, 0);
