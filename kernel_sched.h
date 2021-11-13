@@ -91,6 +91,24 @@ enum SCHED_CAUSE {
 	SCHED_USER /**< @brief User-space code called yield */
 };
 
+typedef struct process_thread_control_block{
+
+  TCB* tcb;
+  Task task;
+  int argl;
+  void* args;
+
+  int exitval;
+
+  int exited;
+  int detached;
+  CondVar exit_cv;
+
+  int refcount;
+
+} PTCB;
+
+
 /**
   @brief The thread control block
 
