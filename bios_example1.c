@@ -10,5 +10,3 @@ int main()
   vm_boot(bootfunc, 4, 0);
   return 0;
 }
-
-//1231412341241
