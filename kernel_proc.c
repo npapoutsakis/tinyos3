@@ -52,17 +52,7 @@ static inline void initialize_PCB(PCB* pcb)
 
 static PCB* pcb_freelist;
 
-//TODO: Finish init_ptcb
-PTCB* init_ptcb()
-{
-  PTCB* ptcb = (PTCB*)xmalloc(sizeof(PTCB));
-  ptcb->
-
-}
-
-
-void initialize_processes()
-{
+void initialize_processes(){
   /* initialize the PCBs */
   for(Pid_t p=0; p<MAX_PROC; p++) {
     initialize_PCB(&PT[p]);
@@ -88,8 +78,7 @@ void initialize_processes()
 /*
   Must be called with kernel_mutex held
 */
-PCB* acquire_PCB()
-{
+PCB* acquire_PCB(){
   PCB* pcb = NULL;
 
   if(pcb_freelist != NULL) {
@@ -105,8 +94,7 @@ PCB* acquire_PCB()
 /*
   Must be called with kernel_mutex held
 */
-void release_PCB(PCB* pcb)
-{
+void release_PCB(PCB* pcb){
   pcb->pstate = FREE;
   pcb->parent = pcb_freelist;
   pcb_freelist = pcb;
@@ -141,8 +129,7 @@ void start_main_thread()
 /*
 	System call to create a new process.
  */
-Pid_t sys_Exec(Task call, int argl, void* args)
-{
+Pid_t sys_Exec(Task call, int argl, void* args){
   PCB *curproc, *newproc;
   
   /* The new process PCB */
@@ -191,13 +178,29 @@ Pid_t sys_Exec(Task call, int argl, void* args)
     the initialization of the PCB.
    */
   if(call != NULL) {
-    newproc->main_thread = spawn_thread(newproc, start_main_thread);
+
+    PTCB* ptcb = (PTCB*)xmalloc(sizeof(PTCB)); //acquire space for ptcb
+    ptcb->refcount = 0;
+    ptcb->exited =0;
+    ptcb->detached = 0;
+    ptcb->exit_cv = COND_INIT;
+
+    TCB* tcb  = spawn_thread(newproc, start_main_thread); 
+    newproc->main_thread = tcb;
+    tcb->ptcb = ptcb;
+    ptcb->tcb = tcb;
+    ptcb->refcount++;
+
+    rlnode_init(&ptcb->ptcb_list_node, ptcb);
+    rlist_push_back(&newproc->ptcb_list, &ptcb->ptcb_list_node);
+
+    newproc->thread_count++;
+
     wakeup(newproc->main_thread);
   }
 
-
-finish:
-  return get_pid(newproc);
+  finish:
+    return get_pid(newproc);
 }
 
 

@@ -20,9 +20,9 @@ void start_new_multithread()
   ThreadExit(exitval);
 }
 
-void increase_refcount(PTCB* ptcb){
-  ptcb->refcount ++;
-}
+/*void increase_refcount(PTCB* ptcb){
+  ptcb->refcount++;
+}*/
 
 /** 
   @brief Create a new thread in the current process.
@@ -45,10 +45,10 @@ if(task!=NULL){
     //TCB* tcb;
 
     TCB* tcb  = spawn_thread(CURPROC, start_new_multithread); //??
-    
+    CURPROC->main_thread = tcb;
     tcb->ptcb = ptcb;
     ptcb->tcb = tcb;
-    increase_refcount(ptcb);
+    ptcb->refcount++;
 
     rlnode_init(&ptcb->ptcb_list_node, ptcb);
     rlist_push_back(&CURPROC->ptcb_list, &ptcb->ptcb_list_node);
