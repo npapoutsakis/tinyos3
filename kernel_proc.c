@@ -35,6 +35,8 @@ static inline void initialize_PCB(PCB* pcb)
   pcb->pstate = FREE;
   pcb->argl = 0;
   pcb->args = NULL;
+  //new
+  pcb->thread_count = 0;
 
   for(int i=0;i<MAX_FILEID;i++)
     pcb->FIDT[i] = NULL;
@@ -49,6 +51,15 @@ static inline void initialize_PCB(PCB* pcb)
 
 
 static PCB* pcb_freelist;
+
+//TODO: Finish init_ptcb
+PTCB* init_ptcb()
+{
+  PTCB* ptcb = (PTCB*)xmalloc(sizeof(PTCB));
+  ptcb->
+
+}
+
 
 void initialize_processes()
 {
@@ -109,9 +120,10 @@ void release_PCB(PCB* pcb)
  *
  */
 
+
 /*
-	This function is provided as an argument to spawn,
-	to execute the main thread of a process.
+  This function is provided as an argument to spawn,
+  to execute the main thread of a process.
 */
 void start_main_thread()
 {
