@@ -179,24 +179,32 @@ Pid_t sys_Exec(Task call, int argl, void* args){
    */
   if(call != NULL) {
 
+    /*Here we dont change any values of the main_thread (already initialized in CreateThread). 
+    We only make tcb point to newproc and add new ptcb to newprocs ptcb list*/
+
+    //initialization of new ptcb
     PTCB* ptcb = (PTCB*)xmalloc(sizeof(PTCB)); //acquire space for ptcb
     ptcb->refcount = 0;
     ptcb->exited =0;
     ptcb->detached = 0;
     ptcb->exit_cv = COND_INIT;
 
+    //initialization of new tcb
     TCB* tcb  = spawn_thread(newproc, start_main_thread); 
-    newproc->main_thread = tcb;
+    //newproc->main_thread = tcb;
     tcb->ptcb = ptcb;
+    tcb->owner_pcb = newproc;
     ptcb->tcb = tcb;
     ptcb->refcount++;
 
+    //adding ptcb to newprocs ptcb list
     rlnode_init(&ptcb->ptcb_list_node, ptcb);
     rlist_push_back(&newproc->ptcb_list, &ptcb->ptcb_list_node);
 
     newproc->thread_count++;
 
-    wakeup(newproc->main_thread);
+    wakeup(ptcb->tcb);
+    //wakeup(newproc->main_thread);
   }
 
   finish:
