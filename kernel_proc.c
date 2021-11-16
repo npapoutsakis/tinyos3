@@ -195,7 +195,7 @@ Pid_t sys_Exec(Task call, int argl, void* args){
     tcb->ptcb = ptcb;
     tcb->owner_pcb = newproc;
     ptcb->tcb = tcb;
-    ptcb->refcount++;
+    //ptcb->refcount++;
 
     //adding ptcb to newprocs ptcb list
     rlnode_init(&ptcb->ptcb_list_node, ptcb);

@@ -17,7 +17,7 @@ void start_new_multithread()
   void* args = cur_thread()->ptcb->args;
 
   exitval = call(argl,args);
-  ThreadExit(exitval);
+  ThreadExit(exitval); // sys_ThreadExit or ThreadExit?
 }
 
 /*void increase_refcount(PTCB* ptcb){
@@ -34,7 +34,7 @@ Tid_t sys_CreateThread(Task task, int argl, void* args)
 
 if(task!=NULL){
 
-    
+    //initialization of new ptcb
     PTCB* ptcb = (PTCB*)xmalloc(sizeof(PTCB)); //acquire space for ptcb
     ptcb->refcount = 0;
     ptcb->exited =0;
@@ -44,16 +44,17 @@ if(task!=NULL){
 
     //TCB* tcb;
 
+    //initialization of new tcb
     TCB* tcb  = spawn_thread(CURPROC, start_new_multithread); //??
     CURPROC->main_thread = tcb;
     tcb->ptcb = ptcb;
     ptcb->tcb = tcb;
-    ptcb->refcount++;
+    //ptcb->refcount++;
 
     rlnode_init(&ptcb->ptcb_list_node, ptcb);
     rlist_push_back(&CURPROC->ptcb_list, &ptcb->ptcb_list_node);
 
-    CURPROC->thread_count ++;
+    CURPROC->thread_count++;
 
     wakeup(ptcb->tcb); 
 
@@ -76,6 +77,18 @@ Tid_t sys_ThreadSelf()
   */
 int sys_ThreadJoin(Tid_t tid, int* exitval)
 {
+  // TODO: Finish ThreadJoin
+  // tid is (TCB*) T2
+  PCB* pcb = (PCB*) tid->owner_pcb;
+  PTCB* ptcb = (PTCB*) tid->ptcb;
+
+  if(pcb != CURPROC || cur_thread() != (TCB*) tid != ptcb->detached != 1){
+    kernel_wait(pcb->exitval,SCHED_USER)
+
+  }
+  
+
+
 	return -1;
 }
 
