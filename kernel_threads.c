@@ -28,38 +28,48 @@ void start_new_multithread()
 /** 
   @brief Create a new thread in the current process.
   */
-Tid_t sys_CreateThread(Task task, int argl, void* args)
-{
+Tid_t sys_CreateThread(Task task, int argl, void* args){
 
-  //initialize ptcb and tcb
+  if(task!=NULL){
 
-if(task!=NULL){
-
+    //initialize ptcb and tcb
     //initialization of new ptcb
     PTCB* ptcb = (PTCB*)xmalloc(sizeof(PTCB)); //acquire space for ptcb
-    ptcb->refcount = 0;
+    ptcb->task = task;
+    ptcb->argl = argl;
+    ptcb->args = args;
+    ptcb->exitval = CURPROC->exitval;
+    ptcb->exit_cv = COND_INIT;
     ptcb->exited =0;
     ptcb->detached = 0;
-    ptcb->exit_cv = COND_INIT;
+    ptcb->refcount = 0;
 
-
-    //TCB* tcb;
+    //Pass ptcb to curr_thread, in order to pass process info to new thread
+    cur_thread()->ptcb = ptcb;
 
     //initialization of new tcb
-    TCB* tcb  = spawn_thread(CURPROC, start_new_multithread); //??
-    CURPROC->main_thread = tcb;
+    TCB* tcb  = spawn_thread(CURPROC, start_new_multithread);
+
+
+    //CURPROC->main_thread = tcb;
+
+
+    // Connect new tcb with ptcb
     tcb->ptcb = ptcb;
     ptcb->tcb = tcb;
-    //ptcb->refcount++;
-
+    //ptcb->tcb->owner_pcb = tcb->owner_pcb;
+    
+    // Add ptcb_node to pcb's ptcb_list
     rlnode_init(&ptcb->ptcb_list_node, ptcb);
     rlist_push_back(&CURPROC->ptcb_list, &ptcb->ptcb_list_node);
 
+    // +1 thread to PCB
     CURPROC->thread_count++;
 
     wakeup(ptcb->tcb); 
 
     return (Tid_t) ptcb;
+
   }
 
   return NOTHREAD;

@@ -1031,6 +1031,18 @@ static int create_join_thread_task(int argl, void* args) {
 	return 2;
 }
 
+BOOT_TEST(test_create_thread,
+	"Test that thread is created correctly")
+{
+	create_join_thread_flag = 0;
+
+	Tid_t t = CreateThread(create_join_thread_task, sizeof(create_join_thread_flag), &create_join_thread_flag);
+	
+	/* Success in creating thread */
+	ASSERT(t!=NOTHREAD);
+
+	return 0;
+}
 
 BOOT_TEST(test_create_join_thread,
 	"Test that a process thread can be created and joined. Also, that "
@@ -1398,6 +1410,7 @@ TEST_SUITE(thread_tests,
 	"A suite of tests for threads."
 	)
 {
+	&test_create_thread,
 	&test_join_illegal_tid_gives_error,
 	&test_detach_illegal_tid_gives_error,
 	&test_detach_self,

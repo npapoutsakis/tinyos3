@@ -94,6 +94,7 @@ enum SCHED_CAUSE {
 typedef struct process_thread_control_block{
 
   TCB* tcb;
+
   Task task;
   int argl;
   void* args;
@@ -104,9 +105,9 @@ typedef struct process_thread_control_block{
   int detached;
   CondVar exit_cv;
 
-  rlnode ptcb_list_node;
-
   int refcount;
+
+  rlnode ptcb_list_node;
 
 } PTCB;
 
