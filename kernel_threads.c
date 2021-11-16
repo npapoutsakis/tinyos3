@@ -18,7 +18,7 @@ void start_new_multithread()
   void* args = cur_thread()->ptcb->args;
 
   exitval = call(argl,args);
-  ThreadExit(exitval); // sys_ThreadExit or ThreadExit?
+  sys_ThreadExit(exitval);
 }
 
 /*void increase_refcount(PTCB* ptcb){
@@ -33,7 +33,7 @@ Tid_t sys_CreateThread(Task task, int argl, void* args){
   if(task!=NULL){
 
     //initialize ptcb and tcb
-    //initialization of new ptcb
+    //initialization of new ptcb  
     PTCB* ptcb = (PTCB*)xmalloc(sizeof(PTCB)); //acquire space for ptcb
     ptcb->task = task;
     ptcb->argl = argl;
@@ -50,9 +50,7 @@ Tid_t sys_CreateThread(Task task, int argl, void* args){
     //initialization of new tcb
     TCB* tcb  = spawn_thread(CURPROC, start_new_multithread);
 
-
     //CURPROC->main_thread = tcb;
-
 
     // Connect new tcb with ptcb
     tcb->ptcb = ptcb;
@@ -88,39 +86,58 @@ Tid_t sys_ThreadSelf()
   */
 int sys_ThreadJoin(Tid_t tid, int* exitval)
 {
-  if(tid != NULL){
+
+  if((PTCB*)tid != NULL){
 
     // tid is (PTCB*) of T2
-    PTCB* ptcb = (PTCB*) tid;
-    TCB* tcb = ptcb->tcb;
-    PCB* pcb = tcb->owner_pcb;
+    PTCB* T2 = (PTCB*) tid;
+    TCB* T2_tcb = T2->tcb;
+    PCB* T2_pcb = T2_tcb->owner_pcb;
 
-    if(ptcb->detached == 1){
+    if(T2->detached == 1){
       printf("Thread Detached");
       return -1;
     }
 
-    if(pcb != CURPROC){
+    if(T2_pcb != CURPROC){
       printf("Process different than Current proccess");
       return -1;
     }
 
-    if(cur_thread() == tcb){
+    if(cur_thread() == T2_tcb){
       printf("Current Thread self joins");
       return -1;
     }
 
-    if(ptcb->exited == 1){
+    if(T2->exited == 1){
       printf("Thread Exited");
       return -1;
     }
+    //wait until T2 exits or detaches
+    while(T2->exited==0 && T2->detached==0){
+      kernel_wait(&T2->exit_cv,SCHED_USER);
+    }
 
-    *exitval = kernel_wait(&ptcb->exit_cv,SCHED_USER);
-  
+    if(T2->exited==1){ 
+      T2->refcount++;
+      *exitval = T2->exitval;
+    }
+
+
+    if(exitval!=NULL){
+      assert(T2->refcount>0);
+      T2->refcount--;
+      if(T2->refcount==0){
+        rlist_remove(&T2->ptcb_list_node);
+        free(T2);
+    }
+  }
+
     return 0;
   }
 
   return -1;
+
 
 }
 
@@ -129,6 +146,18 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
   */
 int sys_ThreadDetach(Tid_t tid)
 {
+  if((PTCB*) tid !=NULL){
+    PTCB* Detached_PTCB = (PTCB*) tid;
+    assert(Detached_PTCB->tcb!=NULL);
+
+    if(Detached_PTCB->exited==1){
+      return -1;
+    }
+
+    Detached_PTCB->detached=1;
+    kernel_broadcast(&Detached_PTCB->exit_cv);
+    return 0;
+}
 	return -1;
 }
 
