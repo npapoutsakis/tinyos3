@@ -2,6 +2,7 @@
 #include "tinyos.h"
 #include "kernel_sched.h"
 #include "kernel_proc.h"
+#include "kernel_cc.h"
 
 
 /*
@@ -76,7 +77,42 @@ Tid_t sys_ThreadSelf()
   */
 int sys_ThreadJoin(Tid_t tid, int* exitval)
 {
-	return -1;
+
+  if(tid != NULL){
+
+    // tid is (PTCB*) of T2
+    PTCB* ptcb = (PTCB*) tid;
+    TCB* tcb = ptcb->tcb;
+    PCB* pcb = tcb->owner_pcb;
+
+    if(ptcb->detached == 1){
+      printf("Thread Detached");
+      return -1;
+    }
+
+    if(pcb != CURPROC){
+      printf("Process different than Current proccess");
+      return -1;
+    }
+
+    if(cur_thread() == tcb){
+      printf("Current Thread self joins");
+      return -1;
+    }
+
+    if(ptcb->exited == 1){
+      printf("Thread Exited");
+      return -1;
+    }
+
+    *exitval = kernel_wait(&ptcb->exit_cv,SCHED_USER);
+  
+    return 0;
+  }
+
+  return -1;
+
+
 }
 
 /**
