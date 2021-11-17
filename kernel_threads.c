@@ -26,6 +26,19 @@ void start_new_multithread()
   ptcb->refcount++;
 }*/
 
+
+// Checks if thread(ptcb) exists in currproc thread list(ptcb_list) 
+int check_valid_ptcb(Tid_t tid){
+  // Checks if ptcb is valid/exists
+
+  // if rlist_find returns 1, ptcb exists in current's proccess ptcb list
+  PTCB* ptcb = (PTCB*) tid;
+  if(rlist_find(&CURPROC->ptcb_list, ptcb, NULL))
+    return 1;
+  else 
+    return 0;
+}
+
 /** 
   @brief Create a new thread in the current process.
   */
@@ -97,22 +110,10 @@ Tid_t sys_CreateThread(Task task, int argl, void* args){
 /**
   @brief Return the Tid of the current thread.
  */
-Tid_t sys_ThreadSelf()
-{
+Tid_t sys_ThreadSelf(){
+
   assert(cur_thread()->ptcb != NULL);
 	return (Tid_t) cur_thread()->ptcb;
-}
-
-
-int check_valid_ptcb(Tid_t tid){
-  // Checks if ptcb is valid/exists
-
-  // if rlist_find returns 1, ptcb exists in current's proccess ptcb list
-  PTCB* ptcb = (PTCB*) tid;
-  if(rlist_find(&CURPROC->ptcb_list, ptcb, NULL))
-    return 1;
-  else 
-    return 0;
 }
 
 /**
@@ -120,65 +121,74 @@ int check_valid_ptcb(Tid_t tid){
   */
 int sys_ThreadJoin(Tid_t tid, int* exitval){
   
-  PTCB* ptcb_to_join = (PTCB*) tid;
+  PTCB* T2 = (PTCB*) tid;
 
-  if(rlist_find(&CURPROC->ptcb_list, ptcb_to_join, NULL) != NULL && tid != sys_ThreadSelf() && ptcb_to_join->detached == 0) { /**< Checks*/
+  // Checks if tid is pointing to a valid/existing thread
+  if(!check_valid_ptcb(tid))
+    return -1;
 
-    ptcb_to_join->refcount++; //Increase ref counter by 1
+  // If thread tries to self-join, quit
+  if(tid == sys_ThreadSelf())
+    return -1;
 
-    while (ptcb_to_join->exited != 1 && ptcb_to_join->detached != 1) // Wait till new ptcb is exited or detached.
-    {
-      kernel_wait(&ptcb_to_join->exit_cv, SCHED_USER);
-    }
+  // If thread is detached, quit
+  if(T2->detached == 1)
+    return -1;
 
-    ptcb_to_join->refcount--; // Since get detached or exited, decrease ref counter
+  T2->refcount++; //Increase ref counter by 1
 
-    if(ptcb_to_join->detached != 0) // If get detached dont return the exit value
-      return -1;
-
-    if(exitval!= NULL ) // exitval save 
-      *exitval = ptcb_to_join->exitval;
-
-    if(ptcb_to_join->refcount == 0){ // If PTCB exited and no other thread waits it then remove from PTCB list and set free.
-      rlist_remove(&ptcb_to_join->ptcb_list_node); 
-      free(ptcb_to_join);
-    }
-    return 0;
+  while (T2->exited != 1 && T2->detached != 1) // Wait till new thread exits or gets detached.
+  {
+    kernel_wait(&T2->exit_cv, SCHED_USER);
   }
-  return -1;
+
+  T2->refcount--; // Since T2 detaches or exits, decrease ref counter
+
+  if(T2->detached == 1) // If T2 gets detached dont return the exit value
+    return -1;
+
+  if(exitval!= NULL ) // exitval save 
+    *exitval = T2->exitval;
+
+  if(T2->refcount == 0){ // If T2 exited and no other thread waits then remove from PTCB list
+    rlist_remove(&T2->ptcb_list_node); 
+    free(T2);
+  }
+  
+  return 0;
 }
 
 /**
   @brief Detach the given thread.
   */
-int sys_ThreadDetach(Tid_t tid)
-{
-  PTCB* ptcb_to_detach = (PTCB*) tid;
+int sys_ThreadDetach(Tid_t tid){
 
-  if(tid != NOTHREAD && rlist_find(& CURPROC->ptcb_list, ptcb_to_detach, NULL) != NULL && ptcb_to_detach->exited == 0){ // Checks
-    ptcb_to_detach->detached = 1; // Set ptcb to detached
-    kernel_broadcast(&ptcb_to_detach->exit_cv); // Wake up Threads
-    return 0;
-  }else{
+  PTCB* Detached_PTCB = (PTCB*) tid;
+
+  // Checks if tid is pointing to a valid/existing thread
+  if(!check_valid_ptcb(tid) || tid == NOTHREAD)
     return -1;
-  }
+
+  Detached_PTCB->detached = 1; // Set ptcb to detached
+  kernel_broadcast(&Detached_PTCB->exit_cv); // Wake up Threads
+ 
+  return 0;
 }
 
 /**
   @brief Terminate the current thread.
   */
-void sys_ThreadExit(int exitval)
-{
+void sys_ThreadExit(int exitval){
 
   PTCB* ptcb = (PTCB*) sys_ThreadSelf();    
   
   ptcb->exited = 1;
   ptcb->exitval = exitval;
-  kernel_broadcast(&ptcb->exit_cv);
+  kernel_broadcast(&ptcb->exit_cv); // signal rest of the threads
 
   PCB* curproc = CURPROC;
   curproc->thread_count--;
-  if ( curproc->thread_count == 0){
+  if(curproc->thread_count == 0){
 
     if (get_pid(curproc)!= 1){
 
