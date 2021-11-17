@@ -38,14 +38,31 @@ Tid_t sys_CreateThread(Task task, int argl, void* args){
     PTCB* ptcb = (PTCB*)xmalloc(sizeof(PTCB)); //acquire space for ptcb
     ptcb->task = task;
     ptcb->argl = argl;
-    ptcb->args = args;
-    ptcb->exitval = CURPROC->exitval;
+    if(args!=NULL) {
+      // ptcb->args = malloc(argl);
+      // memcpy(ptcb->args, args, argl);
+      ptcb->args = args;
+      assert(ptcb->args != NULL);
+      fprintf(stderr, "args value");  
+    }
+    else{
+      ptcb->args=NULL;
+      assert(ptcb->args == NULL);
+    }
+    // if(args!=NULL) {
+    //   ptcb->args = malloc(argl);
+    //   memcpy(ptcb->args, args, argl);
+    // }
+    // else
+    //   ptcb->args=NULL;
+    ptcb->exitval = 0;
     ptcb->exit_cv = COND_INIT;
     ptcb->exited =0;
     ptcb->detached = 0;
     ptcb->refcount = 0;
 
     //Pass ptcb to curr_thread, in order to pass process info to new thread
+    assert(cur_thread() != NULL);
     cur_thread()->ptcb = ptcb;
 
     //initialization of new tcb
@@ -79,69 +96,81 @@ Tid_t sys_CreateThread(Task task, int argl, void* args){
  */
 Tid_t sys_ThreadSelf()
 {
-	return (Tid_t) cur_thread();
+  assert(cur_thread()->ptcb != NULL);
+	return (Tid_t) cur_thread()->ptcb;
+}
+
+
+int check_valid_ptcb(Tid_t tid){
+  // Checks if ptcb is valid/exists
+
+  // if rlist_find returns 1, ptcb exists in current's proccess ptcb list
+  PTCB* ptcb = (PTCB*) tid;
+  if(rlist_find(&CURPROC->ptcb_list, ptcb, NULL))
+    return 1;
+  else 
+    return 0;
 }
 
 /**
   @brief Join the given thread.
   */
-int sys_ThreadJoin(Tid_t tid, int* exitval)
-{
+int sys_ThreadJoin(Tid_t tid, int* exitval){
 
-  if((PTCB*)tid != NULL){
+  // tid is (PTCB*) of T2
+  PTCB* T2 = (PTCB*) tid;
 
-    // tid is (PTCB*) of T2
-    PTCB* T2 = (PTCB*) tid;
-    TCB* T2_tcb = T2->tcb;
-    PCB* T2_pcb = T2_tcb->owner_pcb;
+  // Checks if tid is a valid ptcb pointer
+  if(!check_valid_ptcb(tid))
+    return -1;
 
-    if(T2->detached == 1){
-      fprintf(stderr, "Thread already detached");
-      return -1;
-    }
+  TCB* T2_tcb = T2->tcb;
+  PCB* T2_pcb = T2_tcb->owner_pcb;
 
-    if(T2_pcb != CURPROC){
-      fprintf(stderr, "Process different than Current proccess");
-      return -1;
-    }
-
-    if(cur_thread() == T2_tcb){
-      fprintf(stderr, "Current Thread tries to self join");
-      return -1;
-    }
-
-    if(T2->exited == 1){
-      fprintf(stderr, "Thread has already exited");
-      return -1;
-    }
-
-    //wait until T2 exits or detaches
-    while(T2->exited == 0 && T2->detached == 0)
-      kernel_wait(&T2->exit_cv,SCHED_USER);
-
-
-    
-    // In case T2 detached
-    if(T2->detached == 1)
-      return -1;
-
-    // In case T2 exited
-    if(T2->exited == 1){ 
-      T2->refcount++;
-      *exitval = T2->exitval;
-    }
-
-    if(exitval != NULL){
-      assert(T2->refcount>0);
-      T2->refcount--;
-      if(T2->refcount==0){
-        rlist_remove(&T2->ptcb_list_node);
-        free(T2);
-    }
-
+  if(T2->detached == 1){
+    fprintf(stderr, "Thread already detached");
+    return -1;
   }
 
-    return 0;
+  if(T2_pcb != CURPROC){
+    fprintf(stderr, "Process different than Current proccess");
+    return -1;
+  }
+
+  if(cur_thread() == T2_tcb){
+    fprintf(stderr, "Current Thread tries to self join");
+    return -1;
+  }
+
+  if(T2->exited == 1){
+    fprintf(stderr, "Thread has already exited");
+    return -1;
+  }
+
+  //wait until T2 exits or detaches
+  while(T2->exited == 0 && T2->detached == 0)
+    kernel_wait(&T2->exit_cv,SCHED_USER);
+ 
+  // In case T2 detached
+  if(T2->detached == 1)
+    return -1;
+
+  // In case T2 exited
+  if(T2->exited == 1){ 
+    T2->refcount++;
+    *exitval = T2->exitval;
+  }
+
+  if(exitval != NULL){
+    assert(T2->refcount>0);
+    T2->refcount--;
+    if(T2->refcount==0){
+      rlist_remove(&T2->ptcb_list_node);
+      free(T2);
+    }
+
+  return 0;
+
   }
 
   return -1;
@@ -152,19 +181,22 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
   */
 int sys_ThreadDetach(Tid_t tid)
 {
-  if((PTCB*) tid !=NULL){
-    PTCB* Detached_PTCB = (PTCB*) tid;
-    assert(Detached_PTCB->tcb!=NULL);
+  
+  PTCB* Detached_PTCB = (PTCB*) tid;
 
-    if(Detached_PTCB->exited==1)
-      return -1;
+  // Checks if tid is a valid ptcb pointer
+  if(!check_valid_ptcb(tid))
+    return -1;
 
-    Detached_PTCB->detached=1;
-    //in case this thread has joined threads
-    kernel_broadcast(&Detached_PTCB->exit_cv);
-    return 0;
-}
-	return -1;
+  assert(Detached_PTCB->tcb != NULL);
+
+  if(Detached_PTCB->exited==1)
+    return -1;
+
+  Detached_PTCB->detached=1;
+  //in case this thread has joined threads
+  kernel_broadcast(&Detached_PTCB->exit_cv);
+  return 0;
 }
 
 /**

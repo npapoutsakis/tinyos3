@@ -181,29 +181,50 @@ Pid_t sys_Exec(Task call, int argl, void* args){
    */
   if(call != NULL) {
 
-    /*Here we dont change any values of the main_thread (already initialized in CreateThread). 
-    We only make tcb point to newproc and add new ptcb to newprocs ptcb list*/
-
     //initialization of new ptcb
-    PTCB* ptcb = (PTCB*)xmalloc(sizeof(PTCB)); //acquire space for ptcb
-    ptcb->refcount = 0;
+    PTCB* ptcb = (PTCB*)xmalloc(sizeof(PTCB)); //acquire space for ptcb 
+    ptcb->task = call;
+    ptcb->argl = argl;
+    ptcb->args = newproc->args;
+    if(args!=NULL) {
+      // ptcb->args = malloc(argl);
+      // memcpy(ptcb->args, args, argl);
+      ptcb->args = newproc->args;
+      assert(ptcb->args != NULL);
+      fprintf(stderr, "args value");  
+    }
+    else{
+      ptcb->args=NULL;
+      assert(ptcb->args == NULL);
+    }
+    //ptcb->exitval = curproc->exitval;
+    ptcb->exit_cv = COND_INIT;
     ptcb->exited =0;
     ptcb->detached = 0;
-    ptcb->exit_cv = COND_INIT;
+    ptcb->refcount = 0;
 
-    //initialization of new tcb
+    //initialization of main_thread
     TCB* tcb  = spawn_thread(newproc, start_main_thread); 
-    //newproc->main_thread = tcb;
+    newproc->main_thread = tcb; 
+
+    // Connecting main_thread to its ptcb and newproc
     tcb->ptcb = ptcb;
     tcb->owner_pcb = newproc;
     ptcb->tcb = tcb;
-    //ptcb->refcount++;
 
-    //adding ptcb to newprocs ptcb list
+    // Initializing ptcb_list with HEAD: newproc and push back in list first ptcb node
+    rlnode_init(&newproc->ptcb_list, newproc); // newproc may be null
     rlnode_init(&ptcb->ptcb_list_node, ptcb);
     rlist_push_back(&newproc->ptcb_list, &ptcb->ptcb_list_node);
 
-    newproc->thread_count++;
+    //fprintf(stderr, "Reached %d", newproc->thread_count);
+    assert(&newproc->ptcb_list != NULL);
+
+    // first thread of newproc
+    newproc->thread_count = 1;
+
+    // CHECK Dont know if its needed
+    
 
     wakeup(ptcb->tcb);
     //wakeup(newproc->main_thread);
