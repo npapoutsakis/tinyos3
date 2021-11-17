@@ -313,69 +313,21 @@ Pid_t sys_WaitChild(Pid_t cpid, int* status)
 
 void sys_Exit(int exitval)
 {
-  /* Right here, we must check that we are not the boot task. If we are, 
-     we must wait until all processes exit. */
-  if(sys_GetPid()==1) {
+
+  PCB *curproc = CURPROC;  /* cache for efficiency */
+  /* First, store the exit status */
+  curproc->exitval = exitval;
+  /*
+    Here, we must check that we are not the init task.
+    If we are, we must wait until all child processes exit.
+   */
+  if(get_pid(curproc)==1) {
     while(sys_WaitChild(NOPROC,NULL)!=NOPROC);
   }
 
+  sys_ThreadExit(exitval);
 
-  PCB *curproc = CURPROC;  /* cache for efficiency */
-
-//if(curproc->thread_count == 0){
-  /* Do all the other cleanup we want here, close files etc. */
-  if(curproc->args) {
-    free(curproc->args);
-    curproc->args = NULL;
-  }
-
-  /* Clean up FIDT */
-  for(int i=0;i<MAX_FILEID;i++) {
-    if(curproc->FIDT[i] != NULL) {
-      FCB_decref(curproc->FIDT[i]);
-      curproc->FIDT[i] = NULL;
-    }
-  }
-
-  /* Reparent any children of the exiting process to the 
-     initial task */
-  PCB* initpcb = get_pcb(1);
-  while(!is_rlist_empty(& curproc->children_list)) {
-    rlnode* child = rlist_pop_front(& curproc->children_list);
-    child->pcb->parent = initpcb;
-    rlist_push_front(& initpcb->children_list, child);
-  }
-
-  /* Add exited children to the initial task's exited list 
-     and signal the initial task */
-  if(!is_rlist_empty(& curproc->exited_list)) {
-    rlist_append(& initpcb->exited_list, &curproc->exited_list);
-    kernel_broadcast(& initpcb->child_exit);
-  }
-
-  /* Put me into my parent's exited list */
-  if(curproc->parent != NULL) {   /* Maybe this is init */
-    rlist_push_front(& curproc->parent->exited_list, &curproc->exited_node);
-    kernel_broadcast(& curproc->parent->child_exit);
-  }
-
-  /* Disconnect my main_thread */
-  curproc->main_thread = NULL;
-
-  /* Now, mark the process as exited. */
-  curproc->pstate = ZOMBIE;
-//}else{
-//  ThreadExit(exitval);
-//}
-  curproc->thread_count--;
-  curproc->exitval = exitval;
-
-  
-
-  /* Bye-bye cruel world */
-  kernel_sleep(EXITED, SCHED_USER); 
 }
-
 
 
 Fid_t sys_OpenInfo()
