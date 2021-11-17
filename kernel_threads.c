@@ -63,7 +63,9 @@ Tid_t sys_CreateThread(Task task, int argl, void* args){
 
     //Pass ptcb to curr_thread, in order to pass process info to new thread
     assert(cur_thread() != NULL);
-    cur_thread()->ptcb = ptcb;
+    //cur_thread()->ptcb = ptcb; //THIS MIGHT BE NEEDED CHECK
+
+    // IF SOMETHING DOESN'T WORK ADD PCB* FIELD TO PTCB 
 
     //initialization of new tcb
     TCB* tcb  = spawn_thread(CURPROC, start_new_multithread);
@@ -76,7 +78,7 @@ Tid_t sys_CreateThread(Task task, int argl, void* args){
     //ptcb->tcb->owner_pcb = tcb->owner_pcb;
     
     // Add ptcb_node to pcb's ptcb_list
-    rlnode_init(&ptcb->ptcb_list_node, ptcb);
+    rlnode_init(&ptcb->ptcb_list_node, ptcb); // CHECK INSTEAD OF PTCB --> NULL
     rlist_push_back(&CURPROC->ptcb_list, &ptcb->ptcb_list_node);
 
     // +1 thread to PCB
