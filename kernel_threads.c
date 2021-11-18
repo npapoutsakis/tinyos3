@@ -13,7 +13,9 @@
 void start_new_multithread()
 {
   int exitval;
+  //Make sure that ptcb exists
   assert(cur_thread()->ptcb != NULL);
+
   Task call =  cur_thread()->ptcb->task;
   int argl = cur_thread()->ptcb->argl;
   void* args = cur_thread()->ptcb->args;
@@ -21,11 +23,6 @@ void start_new_multithread()
   exitval = call(argl,args);
   ThreadExit(exitval);
 }
-
-/*void increase_refcount(PTCB* ptcb){
-  ptcb->refcount++;
-}*/
-
 
 // Checks if thread(ptcb) exists in currproc thread list(ptcb_list) 
 int check_valid_ptcb(Tid_t tid){
@@ -44,7 +41,7 @@ int check_valid_ptcb(Tid_t tid){
   */
 Tid_t sys_CreateThread(Task task, int argl, void* args){
 
-  if(task!=NULL){
+  if(task != NULL){
 
     //initialize ptcb and tcb
     //initialization of new ptcb  
@@ -52,7 +49,7 @@ Tid_t sys_CreateThread(Task task, int argl, void* args){
     ptcb->task = task;
     ptcb->argl = argl;
     
-    if(args!=NULL) {
+    if(args != NULL) {
       // ptcb->args = malloc(argl);
       // memcpy(ptcb->args, args, argl);
       ptcb->args = args;
@@ -63,15 +60,10 @@ Tid_t sys_CreateThread(Task task, int argl, void* args){
       ptcb->args=NULL;
       assert(ptcb->args == NULL);
     }
-    // if(args!=NULL) {
-    //   ptcb->args = malloc(argl);
-    //   memcpy(ptcb->args, args, argl);
-    // }
-    // else
-    //   ptcb->args=NULL;
+
     ptcb->exitval = 0;
     ptcb->exit_cv = COND_INIT;
-    ptcb->exited =0;
+    ptcb->exited = 0;
     ptcb->detached = 0;
     ptcb->refcount = 0;
 
@@ -84,24 +76,23 @@ Tid_t sys_CreateThread(Task task, int argl, void* args){
     //initialization of new tcb
     TCB* tcb  = spawn_thread(CURPROC, start_new_multithread);
 
-    //CURPROC->main_thread = tcb;
-
     // Connect new tcb with ptcb
     tcb->ptcb = ptcb;
     ptcb->tcb = tcb;
-    //ptcb->tcb->owner_pcb = tcb->owner_pcb;
+    //ptcb->tcb->owner_pcb = tcb->owner_pcb; ---> spawn_thread does this!
     
     // Add ptcb_node to pcb's ptcb_list
-    rlnode_init(&ptcb->ptcb_list_node, ptcb); // CHECK INSTEAD OF PTCB --> NULL
-    rlist_push_back(&CURPROC->ptcb_list, &ptcb->ptcb_list_node);
+    rlnode_init(&ptcb->ptcb_list_node, ptcb); //Init the PTCB node, make it point itself!
+    rlist_push_back(&CURPROC->ptcb_list, &ptcb->ptcb_list_node); // Insert the new PTCB at the list of current PCB.
 
     // +1 thread to PCB
     CURPROC->thread_count++;
 
+    //Wake Up the new thread!
     wakeup(ptcb->tcb); 
 
+    //Return the Tid_t of the ptcb we created
     return (Tid_t) ptcb;
-
   }
 
   return NOTHREAD;
@@ -170,7 +161,7 @@ int sys_ThreadDetach(Tid_t tid){
     return -1;
 
   Detached_PTCB->detached = 1; // Set ptcb to detached
-  kernel_broadcast(&Detached_PTCB->exit_cv); // Wake up Threads
+  kernel_broadcast(&Detached_PTCB->exit_cv); //Wake up Threads
  
   return 0;
 }
@@ -180,7 +171,7 @@ int sys_ThreadDetach(Tid_t tid){
   */
 void sys_ThreadExit(int exitval){
 
-  PTCB* ptcb = (PTCB*) sys_ThreadSelf();    
+  PTCB* ptcb = (PTCB *)sys_ThreadSelf();    
   
   ptcb->exited = 1;
   ptcb->exitval = exitval;
@@ -236,7 +227,7 @@ void sys_ThreadExit(int exitval){
 
     /* Disconnect my main_thread */
     curproc->main_thread = NULL;
-
+    
     /* Now, mark the process as exited. */
     curproc->pstate = ZOMBIE;
   }

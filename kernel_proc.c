@@ -179,6 +179,9 @@ Pid_t sys_Exec(Task call, int argl, void* args){
     we do, because once we wakeup the new thread it may run! so we need to have finished
     the initialization of the PCB.
    */
+
+  /**PTCB Initialization**/
+
   if(call != NULL) {
 
     /*Here we dont change any values of the main_thread (already initialized in CreateThread). 
@@ -200,9 +203,10 @@ Pid_t sys_Exec(Task call, int argl, void* args){
     //ptcb->refcount++;
 
     //adding ptcb to newprocs ptcb list
-    rlnode_init(&ptcb->ptcb_list_node, ptcb);
-    rlist_push_back(&newproc->ptcb_list, &ptcb->ptcb_list_node);
+    rlnode_init(&ptcb->ptcb_list_node, ptcb); //Init the PTCB node, make it point itself!
+    rlist_push_back(&newproc->ptcb_list, &ptcb->ptcb_list_node); // Insert the new PTCB at the list of current PCB.
 
+    // +1 thread to PCB
     newproc->thread_count++;
 
     wakeup(ptcb->tcb);
@@ -314,14 +318,14 @@ Pid_t sys_WaitChild(Pid_t cpid, int* status)
 void sys_Exit(int exitval)
 {
 
-  PCB *curproc = CURPROC;  /* cache for efficiency */
-  /* First, store the exit status */
-  curproc->exitval = exitval;
+  // PCB *curproc = CURPROC;
+  // curproc->exitval = exitval;
+  CURPROC->exitval = exitval;
   /*
     Here, we must check that we are not the init task.
     If we are, we must wait until all child processes exit.
    */
-  if(get_pid(curproc)==1) {
+  if(sys_GetPid() == 1) { //get_pid(curproc)
     while(sys_WaitChild(NOPROC,NULL)!=NOPROC);
   }
 
