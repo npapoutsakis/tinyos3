@@ -4,12 +4,15 @@
 
 #include "kernel_cc.h"
 #include "kernel_proc.h"
-#include "kernel_sched.h"
 #include "tinyos.h"
 
 #ifndef NVALGRIND
 #include <valgrind/valgrind.h>
 #endif
+
+
+#define PRIORITY_QUEUES 3 /**Number Of Queues**/
+
 
 
 /********************************************
@@ -225,7 +228,8 @@ void release_TCB(TCB* tcb)
   Both of these structures are protected by @c sched_spinlock.
 */
 
-rlnode SCHED; /* The scheduler queue */
+//rlnode SCHED[PRIORITY_QUEUES]; /* The scheduler queues*/
+rlnode SCHED; /* The scheduler queue*/
 rlnode TIMEOUT_LIST; /* The list of threads with a timeout */
 Mutex sched_spinlock = MUTEX_INIT; /* spinlock for scheduler queue */
 
@@ -267,6 +271,9 @@ static void sched_register_timeout(TCB* tcb, TimerDuration timeout)
 */
 static void sched_queue_add(TCB* tcb)
 {
+
+	/*Apply changes so that we prioritize tasks depending on sched_cause*/
+
 	/* Insert at the end of the scheduling list */
 	rlist_push_back(&SCHED, &tcb->sched_node);
 

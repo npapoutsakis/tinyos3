@@ -91,21 +91,28 @@ enum SCHED_CAUSE {
 	SCHED_USER /**< @brief User-space code called yield */
 };
 
+/**
+  @brief Process Thread Control Block (PTCB)
+    
+  Declaring a new usefull structure that will help us make our processes multi-threaded!
+ */
+
 typedef struct process_thread_control_block{
 
-  TCB* tcb;
+  TCB* tcb;       
 
-  Task task;
-  int argl;
-  void* args;
+  Task task;     
+  int argl;       /**< @brief Number of arguments*/
+  void* args;     /**< @brief Arguments*/
 
   int exitval;
 
-  int exited;
-  int detached;
+  int exited;     /**< @brief [0, 1] if 1 it's exited, 0 if not*/
+  int detached;   /**< @brief [0, 1] if 1 it's detached, 0 if not*/
+  
   CondVar exit_cv;
-
-  int refcount;
+  
+  int refcount;   /**< @brief Threads that have joined this thread*/
 
   rlnode ptcb_list_node;
 
@@ -122,8 +129,10 @@ typedef struct thread_control_block {
 
 	PCB* owner_pcb; /**< @brief This is null for a free TCB */
 
-  PTCB* ptcb; 
+  PTCB* ptcb;   /**< @brief This is the PTCB of TCB */
 
+  int priority;   /**< @brief Priority index to help us impliment the new scheduling algorithm (MLFQ)*/
+  
 	cpu_context_t context; /**< @brief The thread context */
 	Thread_type type; /**< @brief The type of thread */
 	Thread_state state; /**< @brief The state of the thread */

@@ -47,20 +47,10 @@ Tid_t sys_CreateThread(Task task, int argl, void* args){
     //initialize ptcb and tcb
     //initialization of new ptcb  
     PTCB* ptcb = (PTCB*)xmalloc(sizeof(PTCB)); //acquire space for ptcb
+    
     ptcb->task = task;
     ptcb->argl = argl;
-    
-    if(args != NULL) {
-      // ptcb->args = malloc(argl);
-      // memcpy(ptcb->args, args, argl);
-      ptcb->args = args;
-      assert(ptcb->args != NULL);
-      //fprintf(stderr, "args value");  
-    }
-    else{
-      ptcb->args=NULL;
-      assert(ptcb->args == NULL);
-    }
+    ptcb->args = (args == NULL ? NULL : args);
 
     ptcb->exitval = 0;
     ptcb->exit_cv = COND_INIT;

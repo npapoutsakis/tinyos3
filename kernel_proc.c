@@ -3,7 +3,6 @@
 #include "kernel_cc.h"
 #include "kernel_proc.h"
 #include "kernel_streams.h"
-#include "kernel_threads.h"
 #include "tinyos.h"
 
 
@@ -189,18 +188,22 @@ Pid_t sys_Exec(Task call, int argl, void* args){
 
     //initialization of new ptcb
     PTCB* ptcb = (PTCB*)xmalloc(sizeof(PTCB)); //acquire space for ptcb
+    
+    ptcb->task = call;
+    ptcb->argl = argl;
+    ptcb->args = (args == NULL ? NULL : args);
+
     ptcb->refcount = 0;
-    ptcb->exited =0;
+    ptcb->exited = 0;
     ptcb->detached = 0;
     ptcb->exit_cv = COND_INIT;
 
     //initialization of new tcb
     TCB* tcb  = spawn_thread(newproc, start_main_thread); 
-    //newproc->main_thread = tcb;
+    
+    newproc->main_thread = tcb;
     tcb->ptcb = ptcb;
-    tcb->owner_pcb = newproc;
     ptcb->tcb = tcb;
-    //ptcb->refcount++;
 
     //adding ptcb to newprocs ptcb list
     rlnode_init(&ptcb->ptcb_list_node, ptcb); //Init the PTCB node, make it point itself!
@@ -210,7 +213,6 @@ Pid_t sys_Exec(Task call, int argl, void* args){
     newproc->thread_count++;
 
     wakeup(ptcb->tcb);
-    //wakeup(newproc->main_thread);
   }
 
   finish:
