@@ -317,20 +317,20 @@ Pid_t sys_WaitChild(Pid_t cpid, int* status)
 
 void sys_Exit(int exitval)
 {
+  PCB *curproc = CURPROC;  /* cache for efficiency */
 
-  // PCB *curproc = CURPROC;
-  // curproc->exitval = exitval;
-  CURPROC->exitval = exitval;
-  /*
-    Here, we must check that we are not the init task.
-    If we are, we must wait until all child processes exit.
-   */
-  if(sys_GetPid() == 1) { //get_pid(curproc)
+  /* First, store the exit status */
+  curproc->exitval = exitval;
+
+  /* 
+    Here, we must check that we are not the init task. 
+    If we are, we must wait until all child processes exit. 
+  */
+  if(get_pid(curproc)==1) {
     while(sys_WaitChild(NOPROC,NULL)!=NOPROC);
   }
 
   sys_ThreadExit(exitval);
-
 }
 
 

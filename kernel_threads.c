@@ -13,6 +13,7 @@
 void start_new_multithread()
 {
   int exitval;
+  
   //Make sure that ptcb exists
   assert(cur_thread()->ptcb != NULL);
 
@@ -30,7 +31,7 @@ int check_valid_ptcb(Tid_t tid){
 
   // if rlist_find returns 1, ptcb exists in current's proccess ptcb list
   PTCB* ptcb = (PTCB*) tid;
-  if(rlist_find(&CURPROC->ptcb_list, ptcb, NULL))
+  if(rlist_find(&CURPROC->ptcb_list, ptcb, NULL) && tid != NOTHREAD)
     return 1;
   else 
     return 0;
@@ -128,8 +129,7 @@ int sys_ThreadJoin(Tid_t tid, int* exitval){
 
   T2->refcount++; //Increase ref counter by 1
 
-  while (T2->exited != 1 && T2->detached != 1) // Wait till new thread exits or gets detached.
-  {
+  while(T2->exited != 1 && T2->detached != 1){ // Wait till new thread exits or gets detached.
     kernel_wait(&T2->exit_cv, SCHED_USER);
   }
 
@@ -138,7 +138,7 @@ int sys_ThreadJoin(Tid_t tid, int* exitval){
   if(T2->detached == 1) // If T2 gets detached dont return the exit value
     return -1;
 
-  if(exitval!= NULL ) // exitval save 
+  if(exitval != NULL) // exitval save 
     *exitval = T2->exitval;
 
   if(T2->refcount == 0){ // If T2 exited and no other thread waits then remove from PTCB list
@@ -157,7 +157,7 @@ int sys_ThreadDetach(Tid_t tid){
   PTCB* Detached_PTCB = (PTCB*) tid;
 
   // Checks if tid is pointing to a valid/existing thread
-  if(!check_valid_ptcb(tid) || tid == NOTHREAD)
+  if(!check_valid_ptcb(tid))
     return -1;
 
   Detached_PTCB->detached = 1; // Set ptcb to detached
@@ -171,12 +171,13 @@ int sys_ThreadDetach(Tid_t tid){
   */
 void sys_ThreadExit(int exitval){
 
-  PTCB* ptcb = (PTCB *)sys_ThreadSelf();    
+  PTCB* ptcb = (PTCB  *)sys_ThreadSelf();
   
   ptcb->exited = 1;
   ptcb->exitval = exitval;
   kernel_broadcast(&ptcb->exit_cv); // signal rest of the threads
 
+  /*sys_Exit()*/
   PCB* curproc = CURPROC;
   curproc->thread_count--;
   if(curproc->thread_count == 0){
@@ -231,6 +232,7 @@ void sys_ThreadExit(int exitval){
     /* Now, mark the process as exited. */
     curproc->pstate = ZOMBIE;
   }
+
   /* Bye-bye cruel world */
   kernel_sleep(EXITED, SCHED_USER);
 
