@@ -310,8 +310,7 @@ static void sched_make_ready(TCB* tcb)
 
   *** MUST BE CALLED WITH sched_spinlock HELD ***
 */
-static void sched_wakeup_expired_timeouts()
-{
+static void sched_wakeup_expired_timeouts(){
 	/* Empty the timeout list up to the current time and wake up each thread */
 	TimerDuration curtime = bios_clock();
 
@@ -330,27 +329,22 @@ static void sched_wakeup_expired_timeouts()
   *** MUST BE CALLED WITH sched_spinlock HELD ***
 */
 static TCB* sched_queue_select(TCB* current){
-	int queue_index;
-  
-  /*Starting from the higher priority queue, we search for an existing at currently highest not empty queue*/
-	for (queue_index = PRIORITY_QUEUES - 1; queue_index >= 0; queue_index--)	{
-		if(!is_rlist_empty(&SCHED[queue_index]))
+	rlnode *sel = NULL;
+	/*Starting from the highest priority to lowest priority queue, we search for a non-empty queue*/
+	for(int i = PRIORITY_QUEUES - 1; i >= 0; i--){
+		if(!is_rlist_empty(&SCHED[i])){
+			/* Get the head of the SCHED list */
+			sel = rlist_pop_front(&SCHED[i]);
 			break;
+		}
 	}
 	
-  /* Get the head of the SCHED list */
-	rlnode* sel = rlist_pop_front(&SCHED[queue_index]);
-
 	TCB* next_thread;
-	if(sel == NULL){
-		next_thread = NULL; /* When the list is empty, this is NULL */
-	}
-	else{
-		next_thread = sel->tcb;
-	}
-
-	if (next_thread == NULL)
+	if(sel == NULL)
 		next_thread = (current->state == READY) ? current : &CURCORE.idle_thread;
+	else
+		next_thread = sel->tcb; // get next thread
+		
 
 	next_thread->its = QUANTUM;
 
