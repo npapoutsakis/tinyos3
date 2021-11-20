@@ -11,8 +11,9 @@
 #endif
 
 
-#define PRIORITY_QUEUES 3 /**Number Of Queues**/
-
+#define PRIORITY_QUEUES 4 /**Number Of Queues**/
+#define BOOST_PRIORITY 400 
+static int yieldCounter = 0;
 
 
 /********************************************
@@ -169,6 +170,8 @@ TCB* spawn_thread(PCB* pcb, void (*func)())
 	tcb->wakeup_time = NO_TIMEOUT;
 	rlnode_init(&tcb->sched_node, tcb); /* Intrusive list node */
 
+	tcb->priority = PRIORITY_QUEUES - 1;
+
 	tcb->its = QUANTUM;
 	tcb->rts = QUANTUM;
 	tcb->last_cause = SCHED_IDLE;
@@ -228,8 +231,7 @@ void release_TCB(TCB* tcb)
   Both of these structures are protected by @c sched_spinlock.
 */
 
-//rlnode SCHED[PRIORITY_QUEUES]; /* The scheduler queues*/
-rlnode SCHED; /* The scheduler queue*/
+rlnode SCHED[PRIORITY_QUEUES]; /* The scheduler queues*/
 rlnode TIMEOUT_LIST; /* The list of threads with a timeout */
 Mutex sched_spinlock = MUTEX_INIT; /* spinlock for scheduler queue */
 
@@ -275,7 +277,7 @@ static void sched_queue_add(TCB* tcb)
 	/*Apply changes so that we prioritize tasks depending on sched_cause*/
 
 	/* Insert at the end of the scheduling list */
-	rlist_push_back(&SCHED, &tcb->sched_node);
+	rlist_push_back(&SCHED[tcb->priority], &tcb->sched_node);
 
 	/* Restart possibly halted cores */
 	cpu_core_restart_one();
@@ -334,7 +336,13 @@ static void sched_wakeup_expired_timeouts()
 static TCB* sched_queue_select(TCB* current)
 {
 	/* Get the head of the SCHED list */
-	rlnode* sel = rlist_pop_front(&SCHED);
+	int queue_index;
+	for (queue_index = PRIORITY_QUEUES - 1; queue_index < 0; queue_index--)	{
+		if(!is_rlist_empty(&SCHED[queue_index]))
+			break;
+	}
+	
+	rlnode* sel = rlist_pop_front(&SCHED[queue_index]);
 
 	TCB* next_thread = sel->tcb; /* When the list is empty, this is NULL */
 
@@ -434,6 +442,23 @@ void yield(enum SCHED_CAUSE cause)
 	/* Wake up threads whose sleep timeout has expired */
 	sched_wakeup_expired_timeouts();
 
+	switch(cause){
+		case SCHED_QUANTUM:
+			if(current->priority > 0)
+				current->priority--;
+			break;
+		case SCHED_IO:
+			if(current->priority < PRIORITY_QUEUES - 1)
+				current->priority++;
+			break;
+		case SCHED_MUTEX:
+			if(current->last_cause == SCHED_MUTEX && current->priority > 0)
+			current->priority--;
+			break;
+		default:
+			break;
+	}
+
 	/* Get next */
 	TCB* next = sched_queue_select(current);
 	assert(next != NULL);
@@ -443,10 +468,47 @@ void yield(enum SCHED_CAUSE cause)
 
 	Mutex_Unlock(&sched_spinlock);
 
+	// Increase counter for every yield until we reach 600 to boost priorities
+	yieldCounter++;
+
 	/* Switch contexts */
 	if (current != next) {
 		CURTHREAD = next;
 		cpu_swap_context(&current->context, &next->context);
+	}
+
+	// boost priority of all threads after BOOST_PRIORITY amount of yields are called
+	if(yieldCounter >= BOOST_PRIORITY){
+
+		rlnode* rlnode_tcb;
+		TCB* tcb;
+
+		for (int i = PRIORITY_QUEUES - 2; i >= 0; i--){
+			if (!is_rlist_empty(&SCHED[i])){
+				// while (rlnode_tcb->next->tcb != NULL){
+				// 	rlnode_tcb = rlist_pop_front(&SCHED[i]);
+				// 	tcb = rlnode_tcb->tcb;
+				// 	rlist_push_back(&SCHED[i+1], rlnode_tcb);
+				// 	tcb->priority++;
+				// }
+
+				for(int j = 0; j < rlist_len(&SCHED[i]); j++){
+					rlnode_tcb = rlist_pop_front(&SCHED[i]);
+					tcb = rlnode_tcb->tcb;
+					rlist_push_back(&SCHED[i+1], rlnode_tcb);
+					tcb->priority++;
+				}
+
+				// for(int j=rlist_len(&SCHED[i]); j > 0; j--){
+				// 	rlnode_tcb = rlist_pop_front(&SCHED[i]);
+				// 	tcb = rlnode_tcb->tcb;
+				// 	rlist_push_back(&SCHED[i+1], rlnode_tcb);
+				// 	tcb->priority++;
+				// }
+			}	
+		}
+
+		yieldCounter = 0;
 	}
 
 	/* This is where we get after we are switched back on! A long time
@@ -528,7 +590,8 @@ static void idle_thread()
  */
 void initialize_scheduler()
 {
-	rlnode_init(&SCHED, NULL);
+	for (int i = 0; i < PRIORITY_QUEUES; i++)
+		rlnode_init(&SCHED[i], NULL);
 	rlnode_init(&TIMEOUT_LIST, NULL);
 }
 
