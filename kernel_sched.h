@@ -99,22 +99,22 @@ enum SCHED_CAUSE {
 
 typedef struct process_thread_control_block{
 
-  TCB* tcb;       
+  TCB* tcb;       /**< @brief thread */
 
-  Task task;     
-  int argl;       /**< @brief Number of arguments*/
-  void* args;     /**< @brief Arguments*/
+  Task task;      /**< @brief Thread's function*/
+  int argl;       /**< @brief Thread's number of arguments*/
+  void* args;     /**< @brief Thread's arguments*/
 
-  int exitval;
+  int exitval;    /**< @brief exit value of thread's process*/
 
   int exited;     /**< @brief [0, 1] if 1 it's exited, 0 if not*/
   int detached;   /**< @brief [0, 1] if 1 it's detached, 0 if not*/
   
-  CondVar exit_cv;
+  CondVar exit_cv; 
   
   int refcount;   /**< @brief Threads that have joined this thread*/
 
-  rlnode ptcb_list_node;
+  rlnode ptcb_list_node; /*< @brief Thread's representation as an rlnode*/
 
 } PTCB;
 

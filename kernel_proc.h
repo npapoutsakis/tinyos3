@@ -53,10 +53,10 @@ typedef struct process_control_block {
   rlnode children_node;   /**< @brief Intrusive node for @c children_list */
   rlnode exited_node;     /**< @brief Intrusive node for @c exited_list */
 
-  rlnode ptcb_list;       /**<@brief List of PTCBs*/
+  rlnode ptcb_list;       /**< @brief List of PTCBs*/
 
 
-  int thread_count;       /** Number of threads that this process has*/
+  int thread_count;       /**< @brief Number of threads under this process */
   
   CondVar child_exit;     /**< @brief Condition variable for @c WaitChild. 
 

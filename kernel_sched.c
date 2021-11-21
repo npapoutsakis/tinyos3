@@ -12,7 +12,7 @@
 
 #define PRIORITY_QUEUES 3 /**Number Of Queues**/
 #define BOOST_PRIORITY 300 /**If yield() is called 300 times, increase priority of every Thread by 1 queue*/ 
-static int yield_counter = 0;
+static int yield_counter = 0; /** yield() Counter */
 
 
 /********************************************
@@ -175,6 +175,7 @@ TCB* spawn_thread(PCB* pcb, void (*func)())
 	tcb->curr_cause = SCHED_IDLE;
 
 	tcb->priority = PRIORITY_QUEUES - 1; /**Every new thread has the highest priority*/
+
 	/* Compute the stack segment address and size */
 	void* sp = ((void*)tcb) + THREAD_TCB_SIZE;
 
@@ -269,10 +270,8 @@ static void sched_register_timeout(TCB* tcb, TimerDuration timeout)
 
   *** MUST BE CALLED WITH sched_spinlock HELD ***
 */
-static void sched_queue_add(TCB* tcb)
-{
-	/*Apply changes so that we prioritize tasks depending on sched_cause*/
-	/* Insert at the end of the scheduling list */
+static void sched_queue_add(TCB* tcb){
+	/* Insert at the end of a scheduling queue, according to thread's priority */
 	rlist_push_back(&SCHED[tcb->priority], &tcb->sched_node);
 
 	/* Restart possibly halted cores */
@@ -329,19 +328,20 @@ static void sched_wakeup_expired_timeouts(){
   *** MUST BE CALLED WITH sched_spinlock HELD ***
 */
 static TCB* sched_queue_select(TCB* current){
-	rlnode *sel = NULL;
 	/*Starting from the highest priority to lowest priority queue, we search for a non-empty queue*/
+	rlnode *sel = NULL;
 	for(int i = PRIORITY_QUEUES - 1; i >= 0; i--){
 		if(!is_rlist_empty(&SCHED[i])){
-			/* Get the head of the SCHED list */
+			/* Get the head of the 1st non empty SCHED queue (or NULL if all queues are empty) */
 			sel = rlist_pop_front(&SCHED[i]);
 			break;
 		}
 	}
 	
+	/* Select next thread based on if sel is NULL or not*/
 	TCB* next_thread;
 	if(sel == NULL)
-		next_thread = (current->state == READY) ? current : &CURCORE.idle_thread;
+		next_thread = (current->state == READY) ? current : &CURCORE.idle_thread; // get current thread or idle thread of core
 	else
 		next_thread = sel->tcb; // get next thread
 		
@@ -417,7 +417,7 @@ void sleep_releasing(Thread_state state, Mutex* mx, enum SCHED_CAUSE cause,
 void yield(enum SCHED_CAUSE cause)
 {
 
-	/*Increase counter*/
+	/*Increase yield() counter*/
 	yield_counter++;
 
 	/* Reset the timer, so that we are not interrupted by ALARM */
@@ -447,23 +447,26 @@ void yield(enum SCHED_CAUSE cause)
 	switch(cause){
 		/*Thread uses an entire quantum and has not completed its job yet*/
 		case SCHED_QUANTUM:
+			/*If it's already in lowest priority queue, continue*/
 			if(current->priority > 0)
 				current->priority--;
 			break;
 		/*Thread gives up the CPU before its time slice (quantum) is up*/
 		case SCHED_IO:
-			/*If on topmost queue, do nothing*/
+			/*If it's already in highest priority queue, continue*/
 			if(current->priority < PRIORITY_QUEUES - 1)
 				current->priority++;
 			break;
 		/*A high priority thread wants to access a shared resource and tries to take the
 			mutex, but the mutex is locked by a lower priority thread*/
 		case SCHED_MUTEX:
+			/*If it's already in lowest priority queue, continue*/
+			/*also, if last's thread cause was also SCHED_MUTEX, lower thread's priority*/
 			if(current->priority > 0 && current->curr_cause == SCHED_MUTEX)
 				current->priority--;	
 			break;
 		default:
-		/*If other cause do nothing*/
+		/*If other cause appears, do nothing*/
 			break;
 	}
 
@@ -485,18 +488,16 @@ void yield(enum SCHED_CAUSE cause)
 
 	// Boost priority of all threads after BOOST_PRIORITY amount of yields are called
 	if(yield_counter >= BOOST_PRIORITY){
-
+		// helper rlnode pointer and tcb pointer
 		rlnode* rlnode_tcb;
 		TCB* tcb;
     
-    // Increase priority of all threads by 1 queue
+    	// Increase priority of all threads by 1 queue
 		// Starting from the 2nd highest to the lowest priority queue
 		for (int i = PRIORITY_QUEUES - 2; i >= 0; i--){
-      
-      // Checks if queue is empty
+      		// Checks if queue is empty
 			if (!is_rlist_empty(&SCHED[i])){
-
-        // For each thread inside the queue, pop queue -> get popped rlnode -> push_back rlnode to higher priority queue
+        		// For each thread inside the queue, pop queue -> get popped rlnode -> push_back rlnode to higher priority queue
 				for(int j = 0; j < rlist_len(&SCHED[i]); j++){
 					rlnode_tcb = rlist_pop_front(&SCHED[i]);
 					tcb = rlnode_tcb->tcb;
@@ -506,6 +507,7 @@ void yield(enum SCHED_CAUSE cause)
 			}	
 		}
 
+		// Reset yield_counter
 		yield_counter = 0;
 	}
 

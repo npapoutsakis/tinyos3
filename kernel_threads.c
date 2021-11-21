@@ -30,6 +30,7 @@ int check_valid_ptcb(Tid_t tid){
   // Checks if ptcb is valid/exists
 
   // if rlist_find returns 1, ptcb exists in current's proccess ptcb list
+  // if ptcb doesn't exist in ptcb list, return 0
   PTCB* ptcb = (PTCB*) tid;
   if(rlist_find(&CURPROC->ptcb_list, ptcb, NULL) && tid != NOTHREAD)
     return 1;
@@ -58,19 +59,12 @@ Tid_t sys_CreateThread(Task task, int argl, void* args){
     ptcb->detached = 0;
     ptcb->refcount = 0;
 
-    //Pass ptcb to curr_thread, in order to pass process info to new thread
-    assert(cur_thread() != NULL);
-    //cur_thread()->ptcb = ptcb; //THIS MIGHT BE NEEDED CHECK
-
-    // IF SOMETHING DOESN'T WORK ADD PCB* FIELD TO PTCB 
-
     //initialization of new tcb
     TCB* tcb  = spawn_thread(CURPROC, start_new_multithread);
 
     // Connect new tcb with ptcb
     tcb->ptcb = ptcb;
     ptcb->tcb = tcb;
-    //ptcb->tcb->owner_pcb = tcb->owner_pcb; ---> spawn_thread does this!
     
     // Add ptcb_node to pcb's ptcb_list
     rlnode_init(&ptcb->ptcb_list_node, ptcb); //Init the PTCB node, make it point itself!
@@ -86,6 +80,7 @@ Tid_t sys_CreateThread(Task task, int argl, void* args){
     return (Tid_t) ptcb;
   }
 
+  // In case CreateThread fails, return invalid thread
   return NOTHREAD;
 }
 
@@ -93,7 +88,6 @@ Tid_t sys_CreateThread(Task task, int argl, void* args){
   @brief Return the Tid of the current thread.
  */
 Tid_t sys_ThreadSelf(){
-
   assert(cur_thread()->ptcb != NULL);
 	return (Tid_t) cur_thread()->ptcb;
 }
@@ -102,7 +96,7 @@ Tid_t sys_ThreadSelf(){
   @brief Join the given thread.
   */
 int sys_ThreadJoin(Tid_t tid, int* exitval){
-  
+  // T2 is the given thread which other threads will be joining
   PTCB* T2 = (PTCB*) tid;
 
   // Checks if tid is pointing to a valid/existing thread
@@ -113,7 +107,7 @@ int sys_ThreadJoin(Tid_t tid, int* exitval){
   if(tid == sys_ThreadSelf())
     return -1;
 
-  // If thread is detached, quit
+  // If thread is detached, quit (detached threads cannot be joined)
   if(T2->detached == 1)
     return -1;
 
@@ -143,15 +137,15 @@ int sys_ThreadJoin(Tid_t tid, int* exitval){
   @brief Detach the given thread.
   */
 int sys_ThreadDetach(Tid_t tid){
-
-  PTCB* Detached_PTCB = (PTCB*) tid;
+  // Thread to be detached
+  PTCB* thread = (PTCB*) tid;
 
   // Checks if tid is pointing to a valid/existing thread
   if(!check_valid_ptcb(tid))
     return -1;
 
-  Detached_PTCB->detached = 1; // Set ptcb to detached
-  kernel_broadcast(&Detached_PTCB->exit_cv); //Wake up Threads
+  thread->detached = 1; // Set ptcb to detached
+  kernel_broadcast(&thread->exit_cv); //Wake up threads in waiting list
  
   return 0;
 }
@@ -160,8 +154,8 @@ int sys_ThreadDetach(Tid_t tid){
   @brief Terminate the current thread.
   */
 void sys_ThreadExit(int exitval){
-
-  PTCB* ptcb = (PTCB  *)sys_ThreadSelf();
+  // Current thread(PTCB)
+  PTCB* ptcb = (PTCB *)sys_ThreadSelf();
   
   ptcb->exited = 1;
   ptcb->exitval = exitval;

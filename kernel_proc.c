@@ -212,6 +212,7 @@ Pid_t sys_Exec(Task call, int argl, void* args){
     // +1 thread to PCB
     newproc->thread_count++;
 
+    // make new thread(tcb) READY
     wakeup(ptcb->tcb);
   }
 
