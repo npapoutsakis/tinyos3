@@ -4,6 +4,8 @@
 #include "tinyos.h"
 #include "kernel_dev.h"
 
+#define PIPE_BUFFER_SIZE 8192
+
 /**
 	@file kernel_streams.h
 	@brief Support for I/O streams.
@@ -47,6 +49,17 @@ typedef struct file_control_block
 } FCB;
 
 
+// Pipe control Block
+typedef struct pipe_control_block
+{
+	pipe_t* pipe_ends;
+	CondVar has_space;
+	CondVar has_data;
+	char BUFFER[PIPE_BUFFER_SIZE];
+	FCB* reader;
+	FCB* writer;
+	int r_position, w_position;
+} pipeCB;
 
 /** 
   @brief Initialization for files and streams.
