@@ -462,7 +462,7 @@ void yield(enum SCHED_CAUSE cause)
 		case SCHED_MUTEX:
 			/*If it's already in lowest priority queue, continue*/
 			/*also, if last's thread cause was also SCHED_MUTEX, lower thread's priority*/
-			if(current->priority > 0 && current->curr_cause == SCHED_MUTEX)
+			if(current->priority > 0 && current->last_cause == SCHED_MUTEX)
 				current->priority--;	
 			break;
 		default:
