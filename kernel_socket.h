@@ -51,8 +51,6 @@ typedef struct socket_control_block {
         unbound_socket unbound_s;
         peer_socket peer_s;
     };
-
-    connection_request* connection_r;
     
 } socketCB;
 
