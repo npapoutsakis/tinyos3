@@ -5,6 +5,7 @@
 #include "tinyos.h"
 #include "util.h"
 #include "kernel_streams.h"
+#include "kernel_dev.h"
 
 typedef enum {
     SOCKET_LISTENER,
@@ -12,20 +13,9 @@ typedef enum {
     SOCKET_PEER
 } Socket_type;
 
-// Socket Control Block
-typedef struct socket_control_block {
-    uint refcount;
-    FCB* fcb;
-    Socket_type type;
-    port_t port;
+typedef struct socket_control_block socketCB;
 
-    union kernel_socket {
-        listener_socket listener_s;
-        unbound_socket unbound_s;
-        peer_socket peer_s;
-    };
-    
-} socketCB;
+socketCB* PORT_MAP[MAX_PORT+1];
 
 typedef struct listener_socket {
     rlnode queue;
@@ -48,5 +38,22 @@ typedef struct connection_request {
     CondVar connected_cv;
     rlnode queue_node;
 } connection_request;
+
+// Socket Control Block
+typedef struct socket_control_block {
+    uint refcount;
+    FCB* fcb;
+    Socket_type type;
+    port_t port;
+
+    union {
+        listener_socket listener_s;
+        unbound_socket unbound_s;
+        peer_socket peer_s;
+    };
+
+    connection_request* connection_r;
+    
+} socketCB;
 
 #endif
