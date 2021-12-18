@@ -1,7 +1,5 @@
 #include "tinyos.h"
 #include "kernel_streams.h"
-#include "kernel_sched.h"
-#include "kernel_proc.h"
 #include "kernel_cc.h"
 
 int pipe_read(void* pipe, char* buf, unsigned int size);
