@@ -89,24 +89,24 @@ int sys_Listen(Fid_t sock) {
 	
 	// Verify FCB valid and refers to a socket
 	if(fcb == NULL || fcb->streamfunc != &socket_ops)
-		return -1;
+		return NOFILE;
 
 	socketCB* socket_cb = (socketCB*)fcb->streamobj; // Get socket_cb from streamobj of FCB
 
 	// Socket must be bound to a port
 	if(socket_cb->port == NOPORT)
-		return -1;
+		return NOFILE;
 
 	// Check if socket has already been initialized
 	if(socket_cb->type != SOCKET_UNBOUND)
-		return -1;
+		return NOFILE;
 
 	// Port of socket
 	port_t port = socket_cb->port;
 
 	// Check if port is bound by another listener 
 	if(PORT_MAP[port] != NULL && PORT_MAP[port]->type == SOCKET_LISTENER) // COMMENT: Μπορεί να μην χρειάζεται
-		return -1;
+		return NOFILE;
 
 	// Install socket to PORT_MAP and mark it as listener
 	socket_cb->type = SOCKET_LISTENER;
@@ -117,9 +117,104 @@ int sys_Listen(Fid_t sock) {
 	return 0;
 }
 
-Fid_t sys_Accept(Fid_t lsock)
-{
-	return NOFILE;
+Fid_t sys_Accept(Fid_t lsock) {
+	
+	FCB* fcb = get_fcb(lsock); // Get FCB from Fid table
+	
+	// Verify FCB valid and refers to a socket
+	if(fcb == NULL || fcb->streamfunc != &socket_ops)
+		return NOFILE;
+
+	socketCB* socket_cb = (socketCB*)fcb->streamobj; // Get socket_cb from streamobj of FCB
+
+	// Socket must be bound to a port
+	if(socket_cb->port == NOPORT)
+		return NOFILE;
+
+	// Socket must be listener socket
+	if(socket_cb->type != SOCKET_LISTENER)
+		return NOFILE;
+
+	// if(cb->type == PEER) return -1;							
+	// 	if((PORT_MAP[cb->port])->type != LISTENER) return -1;	
+
+	// 	socketCB* l = PORT_MAP[cb->port];
+
+	// Increase refcount, Comment: here or Connect?
+	socket_cb->refcount++;
+
+	// While reqest queue is empty wait for signal
+	while (is_rlist_empty(&socket_cb->listener_s.queue)) 
+		kernel_wait(&socket_cb->listener_s.req_available, SCHED_USER);
+
+	// Check if port is still valid
+	if(socket_cb->port == NOPORT)
+		return NOFILE;
+
+	// Create new peer socket to connect with socket that sent the connect request
+	Fid_t peer1_fid = sys_Socket(socket_cb->port);
+	if(peer1_fid == NOFILE)
+		return NOFILE;
+
+	FCB* peer1_FCB = get_fcb(peer1_fid);
+	socketCB* peer1 = (socketCB*) peer1_FCB;
+
+	if(peer1 == NULL)
+		return NOFILE;
+
+
+	connection_request* req = (connection_request*) rlist_pop_front(&socket_cb->listener_s.queue)->obj;	
+	// Fid_t peer2Id = (socketCB*) rlist_pop_front(&socket_cb->listener_s.queue)->obj;	
+
+	req->admitted = 1;
+
+	// socketCB* peer2 = req->peer; // Comment: if FCB's not needed during pipe init then uncomment this line
+	Fid_t peer2_fid = req->peer_fid;
+	FCB* peer2_FCB = get_fcb(peer2_fid);
+	socketCB* peer2 = (socketCB*) peer2_FCB;
+
+	if(peer2 == NULL)
+		return NOFILE;
+
+	// Create pipes to connect sockets
+	// Comment: maybe create new method init_pipe for less code
+
+	pipeCB* pipe1 = (pipeCB*) xmalloc(sizeof(pipeCB));
+	pipe1->reader = peer2_FCB;
+	pipe1->writer = peer1_FCB;
+	pipe1->pipe_ends->read = peer2_fid;
+	pipe1->pipe_ends->write = peer1_fid;
+	pipe1->r_position = 0;
+	pipe1->w_position = 0;
+	pipe1->has_data = COND_INIT;
+	pipe1->has_space = COND_INIT;
+	
+	pipeCB* pipe2 = (pipeCB*) xmalloc(sizeof(pipeCB));
+	pipe2->reader = peer1_FCB;
+	pipe2->writer = peer2_FCB;
+	pipe2->pipe_ends->read = peer1_fid;
+	pipe2->pipe_ends->write = peer2_fid;
+	pipe2->r_position = 0;
+	pipe2->w_position = 0;
+	pipe2->has_data = COND_INIT;
+	pipe2->has_space = COND_INIT;
+	
+	peer1->type = SOCKET_PEER;
+	peer1->peer_s.read_pipe = pipe2;
+	peer1->peer_s.write_pipe = pipe1;
+	
+	peer2->type = SOCKET_PEER;
+	peer2->peer_s.read_pipe = pipe1;
+	peer2->peer_s.write_pipe = pipe2;
+	
+	// Signal Connect side
+	kernel_broadcast(&req->connected_cv);
+
+	// Decrease refcount of initial socket
+	socket_cb->refcount--;	
+
+	return peer1_fid;
+
 }
 
 int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)

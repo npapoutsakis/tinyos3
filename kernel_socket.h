@@ -35,6 +35,8 @@ typedef struct peer_socket {
 typedef struct connection_request {
     int admitted;
     socketCB* peer;
+    Fid_t peer_fid;
+
     CondVar connected_cv;
     rlnode queue_node;
 } connection_request;
