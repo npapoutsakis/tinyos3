@@ -2,19 +2,52 @@
 #include "kernel_streams.h"
 #include "kernel_socket.h"
 #include "kernel_cc.h"
+#include "kernel_pipe.h"
 
 //static int counter=0;
 
 int socket_read(void* this, char *buf, unsigned int size){
-	return -1;
+	
+	socketCB* socket = (socketCB*) this;
+
+	if(socket->type != SOCKET_PEER || socket->peer_s.read_pipe == NULL)
+		return NOFILE;
+
+	return pipe_read(socket->peer_s.read_pipe, buf, size);
 }
 
 int socket_write(void* this, const char *buf, unsigned int size){
-	return -1;
+	
+	socketCB* socket = (socketCB*) this;
+
+	if(socket->type != SOCKET_PEER || socket->peer_s.write_pipe == NULL)
+		return NOFILE;
+
+	return pipe_write(socket->peer_s.write_pipe, buf, size);
 }
 
-int socket_close(void* socket){
-	return -1;
+int socket_close(void* this){
+	
+	socketCB* socket = (socketCB*) this;
+
+	switch (socket->type){
+		case SOCKET_LISTENER:
+			PORT_MAP[socket->port] = NULL;
+			kernel_broadcast(&socket->listener_s.req_available);
+			break;
+
+		case SOCKET_PEER:
+			if(!pipe_reader_close(socket->peer_s.read_pipe) || !pipe_writer_close(socket->peer_s.write_pipe))
+				return NOFILE;
+			break;
+
+		case SOCKET_UNBOUND:
+		default:
+			socket = NULL;
+			break;
+	}	
+
+	return 0;
 }
 
 file_ops socket_ops = {

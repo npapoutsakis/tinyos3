@@ -1,11 +1,7 @@
 #include "tinyos.h"
 #include "kernel_streams.h"
 #include "kernel_cc.h"
-
-int pipe_read(void* pipe, char* buf, unsigned int size);
-int pipe_write(void* pipe, const char* buf, unsigned int size);
-int pipe_reader_close(void* pipe);
-int pipe_writer_close(void* pipe);
+#include "kernel_pipe.h"
 
 // Write FCB
 static file_ops W = {
