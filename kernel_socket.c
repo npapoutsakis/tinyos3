@@ -33,6 +33,7 @@ int socket_close(void* this){
 	switch (socket->type){
 		case SOCKET_LISTENER:
 			PORT_MAP[socket->port] = NULL;
+			socket->port = NOPORT;
 			kernel_broadcast(&socket->listener_s.req_available);
 			break;
 
