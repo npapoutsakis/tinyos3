@@ -118,6 +118,10 @@ int pipe_write(void* pipe, const char* buf, unsigned int size){
 
 // Close reader end
 int pipe_reader_close(void* pipe){
+
+	if(pipe == NULL)
+		return NOFILE;
+
 	pipeCB* pipe_in_use = (pipeCB*) pipe;
 	pipe_in_use->reader = NULL;
 
@@ -133,6 +137,10 @@ int pipe_reader_close(void* pipe){
 
 // Close writer end
 int pipe_writer_close(void* pipe){
+
+	if(pipe == NULL)
+		return NOFILE;
+
 	pipeCB* pipe_in_use = (pipeCB*) pipe;
 	pipe_in_use->writer = NULL;
 	
@@ -142,6 +150,6 @@ int pipe_writer_close(void* pipe){
 	else
 		// else wake up read end
 		kernel_broadcast(&pipe_in_use->has_data);
-	
+
 	return 0;
 }

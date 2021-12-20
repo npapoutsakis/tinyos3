@@ -140,9 +140,6 @@ Fid_t sys_Accept(Fid_t lsock) {
 
 	// 	socketCB* l = PORT_MAP[cb->port];
 
-	// Increase refcount, Comment: here or Connect?
-	lsocket->refcount++;
-
 	// While reqest queue is empty wait for signal
 	while (is_rlist_empty(&lsocket->listener_s.queue)){ 
 		kernel_wait(&lsocket->listener_s.req_available, SCHED_USER);
@@ -213,6 +210,9 @@ Fid_t sys_Accept(Fid_t lsock) {
 	peer2->type = SOCKET_PEER;
 	peer2->peer_s.read_pipe = pipe1;
 	peer2->peer_s.write_pipe = pipe2;
+
+	// Increase refcount, Comment: here or Connect?
+	lsocket->refcount++;
 	
 	// Signal Connect side
 	kernel_broadcast(&req->connected_cv);
@@ -294,15 +294,19 @@ int sys_ShutDown(Fid_t sock, shutdown_mode how) {
     switch (how) {
         case SHUTDOWN_READ:
             pipe_reader_close(socket->peer_s.read_pipe);
+			socket->peer_s.read_pipe = NULL;
             break;
 
         case SHUTDOWN_WRITE:
             pipe_writer_close(socket->peer_s.write_pipe);
+			socket->peer_s.write_pipe = NULL;
             break;
 
         case SHUTDOWN_BOTH:
             pipe_writer_close(socket->peer_s.write_pipe);
+			socket->peer_s.write_pipe = NULL;
             pipe_reader_close(socket->peer_s.read_pipe);
+			socket->peer_s.read_pipe = NULL;
             break;
 
         default:
