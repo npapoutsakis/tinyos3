@@ -37,8 +37,8 @@ int socket_close(void* this){
 			break;
 
 		case SOCKET_PEER:
-			if(!pipe_reader_close(socket->peer_s.read_pipe) || !pipe_writer_close(socket->peer_s.write_pipe))
-				return NOFILE;
+			pipe_reader_close(socket->peer_s.read_pipe);
+			pipe_writer_close(socket->peer_s.write_pipe);
 			break;
 
 		case SOCKET_UNBOUND:
@@ -47,7 +47,6 @@ int socket_close(void* this){
 	}	
 
 	free(socket);
-	//socket = NULL;
 	return 0;
 }
 
@@ -189,7 +188,7 @@ Fid_t sys_Accept(Fid_t lsock) {
 	pipe1->pipe_ends = &pipe1_ends;
 	pipe1->pipe_ends->read = peer2_fid;
 	pipe1->pipe_ends->write = peer1_fid;
-	pipe1->r_position = 0;
+	pipe1->r_position = PIPE_BUFFER_SIZE-1;
 	pipe1->w_position = 0;
 	pipe1->has_data = COND_INIT;
 	pipe1->has_space = COND_INIT;
@@ -202,7 +201,7 @@ Fid_t sys_Accept(Fid_t lsock) {
 	pipe2->pipe_ends = &pipe2_ends;
 	pipe2->pipe_ends->read = peer1_fid;
 	pipe2->pipe_ends->write = peer2_fid;
-	pipe2->r_position = 0;
+	pipe2->r_position = PIPE_BUFFER_SIZE-1;
 	pipe2->w_position = 0;
 	pipe2->has_data = COND_INIT;
 	pipe2->has_space = COND_INIT;
@@ -268,7 +267,7 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout) {
 	kernel_broadcast(&lsocket->listener_s.req_available);
 
 	while(req->admitted != 1){
-		if(!(kernel_timedwait(&req->connected_cv, SCHED_USER, timeout)))
+		if(!(kernel_timedwait(&req->connected_cv, SCHED_PIPE, timeout)))
 			return NOFILE;
 	}
 
@@ -279,7 +278,35 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout) {
 
 }
 
-int sys_ShutDown(Fid_t sock, shutdown_mode how)
-{
-	return -1;
+int sys_ShutDown(Fid_t sock, shutdown_mode how) {
+
+	FCB* socket_fcb = get_fcb(sock); // Get FCB from Fid table
+
+    // Verify FCB valid and refers to a socket
+    if(socket_fcb == NULL || socket_fcb->streamfunc != &socket_ops)
+        return NOFILE;
+
+    socketCB* socket = (socketCB*)socket_fcb->streamobj; // Get socket from streamobj of FCB
+
+    if(socket==NULL || socket->type != SOCKET_PEER)
+        return NOFILE;
+
+    switch (how) {
+        case SHUTDOWN_READ:
+            pipe_reader_close(socket->peer_s.read_pipe);
+            break;
+
+        case SHUTDOWN_WRITE:
+            pipe_writer_close(socket->peer_s.write_pipe);
+            break;
+
+        case SHUTDOWN_BOTH:
+            pipe_writer_close(socket->peer_s.write_pipe);
+            pipe_reader_close(socket->peer_s.read_pipe);
+            break;
+
+        default:
+            assert(0);
+    }
+    return 0;
 }

@@ -126,7 +126,7 @@ int pipe_reader_close(void* pipe){
 		free(pipe_in_use);
 	else
 		// else wake up write end
-		kernel_broadcast(& pipe_in_use->has_space);
+		kernel_broadcast(&pipe_in_use->has_space);
 	
 	return 0;
 }
