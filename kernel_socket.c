@@ -143,12 +143,18 @@ Fid_t sys_Accept(Fid_t lsock) {
 
 	// While reqest queue is empty wait for signal
 	while (is_rlist_empty(&lsocket->listener_s.queue)){ 
-		kernel_wait(&lsocket->listener_s.req_available, SCHED_USER);
+		kernel_wait(&lsocket->listener_s.req_available, SCHED_PIPE);
 		
 		// Check if port is still valid
 		if(lsocket->port == NOPORT)
 			return NOFILE;
 
+	}
+
+	// Comment: may not be needed
+	if(PORT_MAP[lsocket->port] == NULL){
+		lsocket = NULL;
+		return NOFILE;
 	}
 	
 	// Create new peer socket to connect with socket that sent the connect request
@@ -170,8 +176,8 @@ Fid_t sys_Accept(Fid_t lsock) {
 
 	// socketCB* peer2 = req->peer; // Comment: if FCB's not needed during pipe init then uncomment this line
 	Fid_t peer2_fid = req->peer_fid;
-	FCB* peer2_FCB = get_fcb(peer2_fid);
-	socketCB* peer2 = (socketCB*) peer2_FCB->streamobj;
+	FCB* peer2_FCB = req->peer->fcb;
+	socketCB* peer2 = (socketCB*) req->peer;
 
 	if(peer2 == NULL)
 		return NOFILE;
@@ -250,9 +256,6 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout) {
 	socketCB* lsocket = PORT_MAP[port];
 
 	// lsocket must be listener socket
-	if(lsocket == NULL || lsocket->type != SOCKET_LISTENER)
-		return NOFILE;
-
 	if(lsocket == NULL || lsocket->type != SOCKET_LISTENER)
 		return NOFILE;
 	
