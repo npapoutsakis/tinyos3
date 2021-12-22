@@ -19,7 +19,7 @@
 static file_ops procinfo_ops = {
     .Open = NULL,
     .Read = procinfo_read,
-    .Write = NULL,
+    .Write = NULL,  //.Write = procinfo_write --> return -1; ???
     .Close = procinfo_close,
 };
 
@@ -345,101 +345,92 @@ void sys_Exit(int exitval)
 }
 
 
-
-
 int procinfo_read(void* procinfo, char *buf, unsigned int size){
-  
-  procinfo_cb* info_cb = (procinfo_cb*) procinfo;
 
-  Pid_t cur_pid;
-  Pid_t cur_ppid;
+  procinfo_cb* info = (procinfo_cb *)procinfo;
 
-/*Stin while diatrexoume to ProcessTable mexri na broume
-to proto oxi free PCB. Kai meta se ena for loop briskoume
-tin thesi tou parentPCB tou ston idio pinaka      */
-  while (info_cb->PT_cursor <= MAX_PROC) {
-    info_cb->PT_cursor += 1;
+  if(info == NULL)
+    return -1;
 
-    if(info_cb->PT_cursor == MAX_PROC){
-      info_cb->PT_cursor=1;
-      return -1;
-    }
+  //Loop to scan PT array
+  while(info->pcb_cursor < MAX_PROC){
+    
+    if(PT[info->pcb_cursor].pstate != FREE){
 
-    if(PT[info_cb->PT_cursor].pstate!=FREE){
-      cur_pid = info_cb->PT_cursor;                //to ID tou proc
-      int i;
-      PCB* parent = PT[info_cb->PT_cursor].parent; //to Parent PCB
+      PCB* current_pcb = &PT[info->pcb_cursor];  
+      
+      //Take information from PCB
+      info->process_info.pid = get_pid(current_pcb);
+      info->process_info.ppid = get_pid(current_pcb->parent);   
 
-      for(i = 0; i < MAX_PROC; i++){            //loop gia anazitisi
-        if(&PT[i] == parent)                    //tou parent ID
-          break;                                //sto ProccessTable
+      //Zombie or Alive?
+      info->process_info.alive = current_pcb->pstate == ZOMBIE ? 0 : 1;
+
+      //Passing PCB's args
+      info->process_info.main_task = current_pcb->main_task;
+      info->process_info.argl = current_pcb->argl;
+      info->process_info.thread_count = current_pcb->thread_count;
+
+      if(current_pcb->args != NULL){
+        memcpy(info->process_info.args, current_pcb->args, info->process_info.argl);
       }
+      //Storing data from procinfo to the buffer
+      memcpy(buf, (char *)&info->process_info, sizeof(info->process_info));
 
-      cur_ppid = i;                             //to ID tou parent
-      break;
+      //Increase Cursor Pointer
+      info->pcb_cursor++;
+
+      return sizeof(info->process_info);
     }
 
+    //If pstate is FREE just increase the cursor pointer by 1
+    info->pcb_cursor++;
   }
 
-  info_cb->process_info.pid=cur_pid;                 //copy tou pid
-  info_cb->process_info.ppid=cur_ppid;               //copy ParentID
-
-
-
-  if(PT[info_cb->PT_cursor].pstate==ZOMBIE)        //copy pState
-    info_cb->process_info.alive = 0; //is not alive
-  else
-    info_cb->process_info.alive = 1; //is alive
-
-  info_cb->process_info.thread_count = PT[info_cb->PT_cursor].thread_count;             //copy #threadlist
-  info_cb->process_info.main_task=PT[info_cb->PT_cursor].main_task;                     //copy main task
-  info_cb->process_info.argl=PT[info_cb->PT_cursor].argl;                               //copy argl
-
-  memcpy(info_cb->process_info.args, PT[info_cb->PT_cursor].args, PROCINFO_MAX_ARGS_SIZE);  //copy args
-
-  memcpy(buf,&(info_cb->process_info),size);                               //copy curinfo to buffer =)
-
-  return size;
-  
+  //Having checked the entire array, return -1
+  return -1;
 }
 
-int procinfo_close(void* this){
+int procinfo_close(void* procinfo){
+  //Get the proc info and delete it
+  procinfo_cb* proc_info = (procinfo_cb*) procinfo;
   
-  procinfo_cb* inf=(procinfo_cb*) this;
-  
-  if(inf!=NULL) {   
-    
-    inf = NULL;
-    free(inf);
+  if(proc_info == NULL)
+    return -1;
+  else{
+    free(proc_info);
     return 0;
   }
-  return -1;
 }
 
 
 Fid_t sys_OpenInfo()
 {
+  Fid_t fid;
+  FCB* fcb;
 
-  Fid_t fid[1];
-  FCB* fcb[1];
-
-  int fid_works = FCB_reserve(1,fid,fcb);
+  //Reserve a position for the PCB
+  int exit_value = FCB_reserve(1, &fid, &fcb);
   
-  if(!fid_works) 
+  if(exit_value == 0){
     return NOFILE;
-//----------------------------------------------------
+  }
 
-//dunamiki desmeusi tou infoControlBlock--------------
-  procinfo_cb* info_cb = (procinfo_cb*) xmalloc(sizeof(procinfo_cb));
-  info_cb->PT_cursor = 1;
-
-  if(info_cb==NULL)
+  //Procinfo Block Creation
+  procinfo_cb* info = (procinfo_cb *)xmalloc(sizeof(procinfo_cb));
+  
+  if(info == NULL){
     return NOFILE;
-//----------------------------------------------------
+  }
+  else{
+    //Set the cursor at the top of the array
+    info->pcb_cursor = 1;
+  }
 
-  fcb[0]->streamobj= info_cb;       //anathesi infoCB
-  fcb[0]->streamfunc= &(procinfo_ops);  //sto FCB pou ftiaksame
+  //FCB_Init
+  fcb->streamobj= info; 
+  fcb->streamfunc= &(procinfo_ops);
 
-  return fid[0];
+  //Return the Id
+  return fid;
 }
-

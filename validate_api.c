@@ -1397,6 +1397,7 @@ TEST_SUITE(thread_tests,
 	"A suite of tests for threads."
 	)
 {
+	&test_threadself,
 	&test_join_illegal_tid_gives_error,
 	&test_detach_illegal_tid_gives_error,
 	&test_detach_self,
@@ -2563,8 +2564,8 @@ TEST_SUITE(all_tests,
 	"A suite containing all tests.")
 {
 	&basic_tests,
-	//&concurrency_tests,
-	//&io_tests,
+	// &concurrency_tests,
+	// &io_tests,
 	&thread_tests,
 	&pipe_tests,
 	&socket_tests,

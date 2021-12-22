@@ -68,14 +68,21 @@ typedef struct process_control_block {
 
 } PCB;
 
-int procinfo_read(void* procinfo, char *buf, unsigned int size);
-int procinfo_close(void* info);
 
+/**
+ * File_Ops Functions
+ * */
+int procinfo_read(void* procinfo, char *buf, unsigned int size);
+int procinfo_close(void* procinfo);
+
+/**
+ * procinfo_cb Structure Declaration
+ * */
 typedef struct procinfo_cb {
   
-  procinfo process_info;
+  procinfo process_info;  //Process Information
   
-  int PT_cursor;
+  int pcb_cursor;         //cursor of a PCB on PT(Process Table)
 
 } procinfo_cb;
 
