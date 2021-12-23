@@ -23,7 +23,6 @@ static file_ops procinfo_ops = {
     .Close = procinfo_close,
 };
 
-
 /* The process table */
 PCB PT[MAX_PROC];
 unsigned int process_count;
@@ -350,7 +349,7 @@ int procinfo_read(void* procinfo, char *buf, unsigned int size){
   procinfo_cb* info = (procinfo_cb *)procinfo;
 
   if(info == NULL)
-    return -1;
+    return NOFILE;
 
   //Loop to scan PT array
   while(info->pcb_cursor < MAX_PROC){
@@ -374,6 +373,7 @@ int procinfo_read(void* procinfo, char *buf, unsigned int size){
       if(current_pcb->args != NULL){
         memcpy(info->process_info.args, current_pcb->args, info->process_info.argl);
       }
+
       //Storing data from procinfo to the buffer
       memcpy(buf, (char *)&info->process_info, sizeof(info->process_info));
 
@@ -388,15 +388,15 @@ int procinfo_read(void* procinfo, char *buf, unsigned int size){
   }
 
   //Having checked the entire array, return -1
-  return -1;
+  return NOFILE;
 }
 
 int procinfo_close(void* procinfo){
-  //Get the proc info and delete it
+  //Get the proc info and free it
   procinfo_cb* proc_info = (procinfo_cb*) procinfo;
   
   if(proc_info == NULL)
-    return -1;
+    return NOFILE;
   else{
     free(proc_info);
     return 0;
@@ -409,7 +409,7 @@ Fid_t sys_OpenInfo()
   Fid_t fid;
   FCB* fcb;
 
-  //Reserve a position for the PCB
+  //Reserve a position for the FCB
   int exit_value = FCB_reserve(1, &fid, &fcb);
   
   if(exit_value == 0){
