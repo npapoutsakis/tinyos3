@@ -103,7 +103,7 @@ int pipe_write(void* pipe, const char* buf, unsigned int size){
 		}
 
 		// if read end is closed return i
-		if(pipe_in_use->reader == NULL) // Comment: pipe_in_use->r_position == (pipe_in_use->w_position+1) % PIPE_BUFFER_SIZE && 
+		if(pipe_in_use->reader == NULL)  
 			return i;
 		
 		// Write data to pipe buffer and increase w_position

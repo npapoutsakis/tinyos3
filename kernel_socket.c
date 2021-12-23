@@ -59,6 +59,7 @@ file_ops socket_ops = {
 };
 
 Fid_t sys_Socket(port_t port) {
+	//Check if port is valid
     if(port < 0 || port > MAX_PORT){
         return NOFILE;
 	}
@@ -71,6 +72,7 @@ Fid_t sys_Socket(port_t port) {
 		return NOFILE;
 	}
 
+	// Init socketCB
 	socketCB* socket = (socketCB*) xmalloc(sizeof(socketCB));
 
 	fcb[0]->streamobj = socket;
@@ -106,7 +108,7 @@ int sys_Listen(Fid_t sock) {
 	port_t port = socket->port;
 
 	// Check if port is bound by another listener 
-	if(PORT_MAP[port] != NULL && PORT_MAP[port]->type == SOCKET_LISTENER) // COMMENT: Μπορεί να μην χρειάζεται
+	if(PORT_MAP[port] != NULL && PORT_MAP[port]->type == SOCKET_LISTENER) 
 		return NOFILE;
 
 	// Install socket to PORT_MAP and mark it as listener
@@ -136,11 +138,6 @@ Fid_t sys_Accept(Fid_t lsock) {
 	if(lsocket->type != SOCKET_LISTENER)
 		return NOFILE;
 
-	// if(cb->type == PEER) return -1;							
-	// 	if((PORT_MAP[cb->port])->type != LISTENER) return -1;	
-
-	// 	socketCB* l = PORT_MAP[cb->port];
-
 	// While reqest queue is empty wait for signal
 	while (is_rlist_empty(&lsocket->listener_s.queue)){ 
 		kernel_wait(&lsocket->listener_s.req_available, SCHED_PIPE);
@@ -151,7 +148,6 @@ Fid_t sys_Accept(Fid_t lsock) {
 
 	}
 
-	// Comment: may not be needed
 	if(PORT_MAP[lsocket->port] == NULL){
 		lsocket = NULL;
 		return NOFILE;
@@ -168,13 +164,14 @@ Fid_t sys_Accept(Fid_t lsock) {
 	if(peer1 == NULL)
 		return NOFILE;
 
+	// Get connection request from listener's queue
 	connection_request* req = (connection_request*) rlist_pop_front(&lsocket->listener_s.queue)->obj;	
-	assert(req != NULL);
-	// Fid_t peer2Id = (socketCB*) rlist_pop_front(&lsocket->listener_s.queue)->obj;	
+	assert(req != NULL);	
 
+	// Request was admitted
 	req->admitted = 1;
 
-	// socketCB* peer2 = req->peer; // Comment: if FCB's not needed during pipe init then uncomment this line
+	// Initialize new peer socket from connection request
 	Fid_t peer2_fid = req->peer_fid;
 	FCB* peer2_FCB = req->peer->fcb;
 	socketCB* peer2 = (socketCB*) req->peer;
@@ -183,8 +180,7 @@ Fid_t sys_Accept(Fid_t lsock) {
 		return NOFILE;
 
 	// Create pipes to connect sockets
-	// Comment: maybe create new method init_pipe for less code
-
+	// Init pipe 1
 	pipeCB* pipe1 = (pipeCB*) xmalloc(sizeof(pipeCB));
 	pipe_t pipe1_ends;
 	pipe1->reader = peer2_FCB;
@@ -197,7 +193,7 @@ Fid_t sys_Accept(Fid_t lsock) {
 	pipe1->has_data = COND_INIT;
 	pipe1->has_space = COND_INIT;
 
-	
+	// Init pipe 2
 	pipeCB* pipe2 = (pipeCB*) xmalloc(sizeof(pipeCB));
 	pipe_t pipe2_ends;
 	pipe2->reader = peer1_FCB;
@@ -210,6 +206,7 @@ Fid_t sys_Accept(Fid_t lsock) {
 	pipe2->has_data = COND_INIT;
 	pipe2->has_space = COND_INIT;
 	
+	// Connect socket with pipes and change both sockets to peer sockets
 	peer1->type = SOCKET_PEER;
 	peer1->peer_s.read_pipe = pipe2;
 	peer1->peer_s.write_pipe = pipe1;
@@ -218,7 +215,6 @@ Fid_t sys_Accept(Fid_t lsock) {
 	peer2->peer_s.read_pipe = pipe1;
 	peer2->peer_s.write_pipe = pipe2;
 
-	// Increase refcount, Comment: here or Connect?
 	lsocket->refcount++;
 	
 	// Signal Connect side
@@ -228,7 +224,6 @@ Fid_t sys_Accept(Fid_t lsock) {
 	lsocket->refcount--;	
 
 	return peer1_fid;
-
 }
 
 int sys_Connect(Fid_t sock, port_t port, timeout_t timeout) {
@@ -242,10 +237,6 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout) {
 
 	socketCB* socket = (socketCB*)socket_fcb->streamobj; // Get socket from streamobj of FCB
 
-	// Socket must be bound to a port
-	// if(socket->port == NOPORT)
-	// 	return NOFILE;
-
 	if(socket->type != SOCKET_UNBOUND)
 		return NOFILE;
 
@@ -253,12 +244,14 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout) {
 	if(port < 0 || port > MAX_PORT || port == NOPORT)
         return NOFILE;
 	
+	// Get Listener socket from given port
 	socketCB* lsocket = PORT_MAP[port];
 
 	// lsocket must be listener socket
 	if(lsocket == NULL || lsocket->type != SOCKET_LISTENER)
 		return NOFILE;
 	
+	// Create connection request to lsocket
 	connection_request* req = (connection_request*) xmalloc(sizeof(connection_request));
 	req->admitted = 0;
 	req->peer_fid = sock;
@@ -268,13 +261,16 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout) {
 	rlnode_init(&req->queue_node, req);
 	rlist_push_back(&lsocket->listener_s.queue, &req->queue_node);
 
+	// Signal lsocket 
 	kernel_broadcast(&lsocket->listener_s.req_available);
 
+	// Wait for request's socket to connect, if not return NOFILE
 	while(req->admitted != 1){
 		if(!(kernel_timedwait(&req->connected_cv, SCHED_PIPE, timeout)))
 			return NOFILE;
 	}
 
+	// socket from request served its purposey
 	lsocket->refcount--;
 	req = NULL;
 
